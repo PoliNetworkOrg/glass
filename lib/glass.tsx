@@ -25,7 +25,7 @@ function Glass3D(props: { texture: Texture }) {
     camera.position.set(0, 0, 500)
     camera.lookAt(0, 0, 0)
     return camera
-  }, [])
+  }, [width, height])
 
   return (
     <Canvas
@@ -82,6 +82,7 @@ export function Glass(props: GlassProps) {
         zIndex: 1,
         ...props.style,
       }}
+      glass-ignore
     >
       {texture ? <Glass3D texture={texture} /> : <GlassFallback />}
       {props.children}

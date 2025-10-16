@@ -4,7 +4,7 @@ import { CanvasTexture, ClampToEdgeWrapping, Texture } from "three"
 
 export async function getTexture(element: HTMLElement) {
   const canvas = await html2canvas(element, {
-    ignoreElements: (el) => el.className === "glass-ignore" || el.tagName === "CANVAS",
+    ignoreElements: (el) => el.hasAttribute("glass-ignore") || el.tagName === "CANVAS",
   })
   return new CanvasTexture(canvas, Texture.DEFAULT_MAPPING, ClampToEdgeWrapping, ClampToEdgeWrapping)
 }
