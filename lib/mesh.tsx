@@ -8,8 +8,18 @@ export type GlassMeshProps = {
 export function GlassMesh(props: GlassMeshProps) {
   return (
     <mesh {...props.mesh} position={[0, 0, 0]}>
-      <boxGeometry args={props.dimensions} />
-      <meshStandardMaterial color={"#00ffff"} />
+      <sphereGeometry args={[props.dimensions[0] / 4]} />
+      <meshPhysicalMaterial
+        roughness={0.4}
+        transmission={1}
+        thickness={10}
+        ior={1}
+        reflectivity={0.7}
+        dispersion={10}
+        emissive={0xffffff}
+        emissiveIntensity={0.1}
+        toneMapped={false}
+      />
     </mesh>
   )
 }

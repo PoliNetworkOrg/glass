@@ -1,35 +1,65 @@
 import { Canvas } from "@react-three/fiber"
-import { useLayoutEffect, useMemo, useRef, useState } from "react"
-import { OrthographicCamera, type Texture } from "three"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import type { Mesh, Texture } from "three"
 import { useGlass } from "./context"
 import { GlassMesh } from "./mesh"
 import type { GlassOptions } from "./types/glass"
+import { type ElementRect, getElementRect } from "./utils/dimensions"
 
 export type GlassProps = {
   children: React.ReactNode
   options: Partial<GlassOptions>
-} & React.HTMLAttributes<HTMLDivElement>
+  reducedMotion?: boolean
+}
 
 function Glass3D(props: { texture: Texture }) {
+  const plane = useRef<Mesh>(null)
   const canv = useRef<HTMLCanvasElement>(null)
 
-  const [dimensions, setDimensions] = useState<[number, number]>([100, 100])
+  const [bounds, setBounds] = useState<ElementRect>({
+    top: 0,
+    left: 0,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+  })
+  const { width, height } = bounds
+
   useLayoutEffect(() => {
-    if (canv.current) {
-      setDimensions([canv.current.clientWidth, canv.current.clientHeight])
+    if (canv.current?.parentElement) {
+      setBounds(getElementRect(canv.current.parentElement))
     }
   }, [canv.current])
-  const [width, height] = dimensions
-  const camera = useMemo(() => {
-    const camera = new OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 0.1, 1000)
-    camera.position.set(0, 0, 500)
-    camera.lookAt(0, 0, 0)
-    return camera
-  }, [width, height])
+
+  useEffect(() => {
+    function onScroll() {
+      const rect = canv.current ? getElementRect(canv.current) : bounds
+      if (plane.current) {
+        const x = rect.left + rect.width / 2 - props.texture.width / 2
+        const y = -(rect.top + rect.height / 2 - props.texture.height / 2)
+        plane.current.position.setComponent(0, -x)
+        plane.current.position.setComponent(1, -y)
+      }
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+    }
+  }, [canv.current, plane.current, bounds])
 
   return (
     <Canvas
-      camera={camera}
+      orthographic
+      camera={{
+        position: [0, 0, 512],
+        left: -width / 2,
+        right: width / 2,
+        top: height / 2,
+        bottom: -height / 2,
+        near: 0.01,
+        far: 2048,
+      }}
       ref={canv}
       style={{
         position: "absolute",
@@ -39,15 +69,14 @@ function Glass3D(props: { texture: Texture }) {
         height: "100%",
         zIndex: -1,
         overflow: "hidden",
+        boxSizing: "border-box",
       }}
     >
-      <ambientLight intensity={Math.PI / 2} />
-      <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
-      <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI} />
-      <GlassMesh dimensions={[width, height, 1]} />
-      <mesh position={[1, 1, 1]}>
-        <planeGeometry args={[width / 2, height / 2, 1]} />
-        <meshBasicMaterial map={props.texture} />
+      <pointLight position={[100, 0, 10]} intensity={1} color={0xff0000} />
+      <GlassMesh dimensions={[width, height, 10]} />
+      <mesh ref={plane} position={[0, 0, -10]}>
+        <planeGeometry args={[props.texture.width, props.texture.height]} />
+        <meshBasicMaterial map={props.texture} toneMapped={false} />
       </mesh>
     </Canvas>
   )
@@ -56,6 +85,7 @@ function Glass3D(props: { texture: Texture }) {
 function GlassFallback() {
   return (
     <div
+      glass-ignore=""
       style={{
         position: "absolute",
         top: 0,
@@ -63,6 +93,8 @@ function GlassFallback() {
         width: "100%",
         height: "100%",
         zIndex: -1,
+        backdropFilter: "blur(4px)",
+        backgroundColor: "rgba(255, 255, 255, 0.8)",
       }}
     />
   )
@@ -72,19 +104,19 @@ export function Glass(props: GlassProps) {
   // const { options } = props
   const { texture } = useGlass()
 
+  const do3D = !!texture && !props.reducedMotion
+
   return (
     <div
-      {...props}
+      glass-ignore=""
       style={{
         display: "flex",
         position: "relative",
-        overflow: "hidden",
         zIndex: 1,
-        ...props.style,
+        flex: 1,
       }}
-      glass-ignore
     >
-      {texture ? <Glass3D texture={texture} /> : <GlassFallback />}
+      {do3D ? <Glass3D texture={texture} /> : <GlassFallback />}
       {props.children}
     </div>
   )
