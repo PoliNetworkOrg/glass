@@ -7,6 +7,7 @@ export function DemoOptions(props: {
 }) {
   const [glassOptions, setGlassOptions] = useState<GlassOptions>(defaultGlassOptions)
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isVisible, setIsVisible] = useState(true)
 
   useEffect(() => {
     props.onChange?.(glassOptions)
@@ -25,15 +26,28 @@ export function DemoOptions(props: {
         color: "white",
         right: 0,
         top: 0,
-        height: "100vh",
-        width: "320px",
+        maxHeight: "100vh",
+        // width: "320px",
         overflowY: "auto",
         zIndex: 1000,
         boxShadow: "-4px 0 12px rgba(0,0,0,0.3)",
+        borderRadius: "8px",
       }}
     >
+      {/** biome-ignore lint/a11y/useButtonType: it's a demo my dood */}
+      <button
+        style={{
+          margin: 0,
+          width: "100%",
+        }}
+        onClick={() => setIsVisible(!isVisible)}
+      >
+        {isVisible ? "Hide Options" : "options"}
+      </button>
+
       <div
         style={{
+          display: isVisible ? "block" : "none",
           padding: "24px",
           backgroundColor: "transparent",
         }}
