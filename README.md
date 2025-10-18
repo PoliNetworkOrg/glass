@@ -17,17 +17,17 @@ apple could never
 - [ ] reactify the thingy
   - [ ] Error boundaries and Suspense to handle delays
 - [ ] make it responsive
-  - [ ] redo the screenshot on resize
+  - [x] redo the screenshot on resize
   - [ ] make it work on zoom
 - [ ] create the geometry
   - [ ] box with rounded edges via path extrude
   - [ ] maybe vector math in rust in WASM?
-- [ ] do the glass thing
-  - [ ] frost !
-  - [ ] refraction
-  - [ ] reflection
-  - [ ] fresnel 
-  - [ ] chromatic aberration ?
+- [x] do the glass thing
+  - [x] frost !
+  - [x] refraction
+  - [x] reflection
+  - [x] fresnel 
+  - [x] chromatic aberration ?
 - [ ] performance
   - [ ] check webgl support
   - [ ] make sure it does not explode (like profiling maybe?)

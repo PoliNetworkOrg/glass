@@ -14,8 +14,10 @@
     "@react-three/fiber": "^9.4.0",
     "@types/three": "^0.180.0",
     "html2canvas-pro": "^1.5.12",
+    "motion": "^12.23.24",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-use-measure": "^2.1.7",
     "three": "^0.180.0"
   },
   "devDependencies": {

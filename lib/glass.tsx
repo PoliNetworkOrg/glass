@@ -1,10 +1,12 @@
 import { Canvas } from "@react-three/fiber"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { Mesh, Texture } from "three"
+import { useReducedMotion } from "motion/react"
+import useMeasure, { type RectReadOnly } from "react-use-measure"
+import type { Texture } from "three"
 import { useGlass } from "./context"
 import { GlassMesh } from "./mesh"
+import { BGPlane } from "./plane"
 import type { GlassOptions } from "./types/glass"
-import { type ElementRect, getElementRect } from "./utils/dimensions"
+// import { type ElementRect, getElementRect } from "./utils/dimensions"
 
 export type GlassProps = {
   children: React.ReactNode
@@ -12,45 +14,24 @@ export type GlassProps = {
   reducedMotion?: boolean
 }
 
-function Glass3D(props: { texture: Texture }) {
-  const plane = useRef<Mesh>(null)
-  const canv = useRef<HTMLCanvasElement>(null)
+function dirFromAngle(angle: number): [number, number, number] {
+  const rad = (angle * Math.PI) / 180
+  const x = Math.cos(rad)
+  const y = Math.sin(rad)
+  return [x, y, 0]
+}
 
-  const [bounds, setBounds] = useState<ElementRect>({
-    top: 0,
-    left: 0,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    right: window.innerWidth,
-    bottom: window.innerHeight,
-  })
-  const { width, height } = bounds
-
-  useLayoutEffect(() => {
-    if (canv.current?.parentElement) {
-      setBounds(getElementRect(canv.current.parentElement))
-    }
-  }, [canv.current])
-
-  useEffect(() => {
-    function onScroll() {
-      const rect = canv.current ? getElementRect(canv.current) : bounds
-      if (plane.current) {
-        const x = rect.left + rect.width / 2 - props.texture.width / 2
-        const y = -(rect.top + rect.height / 2 - props.texture.height / 2)
-        plane.current.position.setComponent(0, -x)
-        plane.current.position.setComponent(1, -y)
-      }
-    }
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => {
-      window.removeEventListener("scroll", onScroll)
-    }
-  }, [canv.current, plane.current, bounds])
+function Glass3D(props: { texture: Texture; bounds: RectReadOnly }) {
+  // const { width, height } = props.bounds
+  const r = Math.min(props.bounds.width, props.bounds.height) / 2
+  const width = r * 2
+  const height = r * 2
 
   return (
     <Canvas
       orthographic
+      flat
+      fallback={<GlassFallback bounds={props.bounds} />}
       camera={{
         position: [0, 0, 512],
         left: -width / 2,
@@ -60,41 +41,43 @@ function Glass3D(props: { texture: Texture }) {
         near: 0.01,
         far: 2048,
       }}
-      ref={canv}
+      // frameloop="demand"
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
+        width,
+        height,
+        margin: "auto",
+        borderRadius: r,
         zIndex: -1,
         overflow: "hidden",
-        boxSizing: "border-box",
       }}
     >
-      <pointLight position={[100, 0, 10]} intensity={1} color={0xff0000} />
+      <ambientLight intensity={3} />
+      <directionalLight color={0xffffff} position={dirFromAngle(45)} intensity={3} />
       <GlassMesh dimensions={[width, height, 10]} />
-      <mesh ref={plane} position={[0, 0, -10]}>
-        <planeGeometry args={[props.texture.width, props.texture.height]} />
-        <meshBasicMaterial map={props.texture} toneMapped={false} />
-      </mesh>
+      <BGPlane texture={props.texture} bounds={props.bounds} />
     </Canvas>
   )
 }
 
-function GlassFallback() {
+function GlassFallback(props: { bounds: RectReadOnly }) {
+  // const { width, height } = props.bounds
+  const r = Math.min(props.bounds.width, props.bounds.height) / 2
+  const width = r * 2
+  const height = r * 2
+
   return (
     <div
       glass-ignore=""
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
+        width,
+        height,
+        margin: "auto",
+        borderRadius: r,
         zIndex: -1,
-        backdropFilter: "blur(4px)",
-        backgroundColor: "rgba(255, 255, 255, 0.8)",
+        overflow: "hidden",
+        backdropFilter: "blur(6px)",
+        backgroundColor: "#F8FAFCCC",
+        outline: "1px solid white",
       }}
     />
   )
@@ -102,9 +85,10 @@ function GlassFallback() {
 
 export function Glass(props: GlassProps) {
   // const { options } = props
+  const [ref, bounds] = useMeasure({ scroll: true })
   const { texture } = useGlass()
-
-  const do3D = !!texture && !props.reducedMotion
+  const reducedMotion = useReducedMotion()
+  const do3D = !!texture && !props.reducedMotion && bounds.width > 0 && bounds.height > 0 && !reducedMotion
 
   return (
     <div
@@ -116,7 +100,25 @@ export function Glass(props: GlassProps) {
         flex: 1,
       }}
     >
-      {do3D ? <Glass3D texture={texture} /> : <GlassFallback />}
+      <div
+        ref={ref}
+        className="glass-container"
+        style={{
+          position: "absolute",
+          display: "flex",
+          overflow: "hidden",
+          justifyContent: "stretch",
+          alignItems: "stretch",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: -1,
+          outline: "1px solid rgba(0, 0, 0, 0.3)",
+        }}
+      >
+        {do3D ? <Glass3D texture={texture} bounds={bounds} /> : <GlassFallback bounds={bounds} />}
+      </div>
       {props.children}
     </div>
   )

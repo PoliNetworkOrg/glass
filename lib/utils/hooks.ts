@@ -1,27 +1,6 @@
-import html2canvas from "html2canvas-pro"
 import { useEffect, useLayoutEffect, useState } from "react"
-import { CanvasTexture, ClampToEdgeWrapping, Texture } from "three"
-
-export async function getTexture(element: HTMLElement) {
-  const canvas = await html2canvas(element, {
-    allowTaint: true,
-    useCORS: true,
-    logging: false,
-    scale: 1,
-
-    ignoreElements: (element) => {
-      let el: Element | null = element
-      while (el) {
-        if (el.hasAttribute("glass-ignore") || el.tagName === "CANVAS") {
-          return true
-        }
-        el = el.parentElement
-      }
-      return false
-    },
-  })
-  return new CanvasTexture(canvas, Texture.DEFAULT_MAPPING, ClampToEdgeWrapping, ClampToEdgeWrapping)
-}
+import type { Texture } from "three"
+import { getTexture } from "./texture"
 
 /**
  * React hook to handle async initializers
@@ -38,19 +17,40 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
-export function useScroll(element?: HTMLElement) {
-  const el = element ?? document.documentElement
-  const [scroll, setScroll] = useState({ x: el.scrollLeft, y: el.scrollTop })
+export function useBackgroundTexture() {
+  const [texture, setTexture] = useState<Texture | null>(null)
+
+  useEffect(() => {
+    const updateTexture = async () => {
+      const tex = await getTexture(document.documentElement)
+      setTexture(tex)
+    }
+    void updateTexture()
+    window.addEventListener("resize", updateTexture)
+    return () => {
+      window.removeEventListener("resize", updateTexture)
+    }
+  }, [])
+
+  return texture
+}
+
+export function useDocumentSize() {
+  const dom = document.documentElement
+  const [size, setSize] = useState({
+    width: dom.scrollWidth,
+    height: dom.scrollHeight,
+  })
 
   useLayoutEffect(() => {
-    function onScroll() {
-      setScroll({ x: el.scrollLeft, y: el.scrollTop })
+    function onResize() {
+      setSize({ width: dom.scrollWidth, height: dom.scrollHeight })
     }
-    el.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", onResize)
     return () => {
-      el.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", onResize)
     }
-  }, [el])
+  }, [])
 
-  return scroll
+  return size
 }

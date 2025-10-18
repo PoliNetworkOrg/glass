@@ -26,13 +26,10 @@ body {
   --cell-size: 400px;
 
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 322vw;
 
   background-color: #888;
   background-image: url("/test-pn.jpg");
+  background-position: center;
   background-size: cover;
   background-repeat: repeat;
 }

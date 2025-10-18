@@ -6,19 +6,22 @@ export type GlassMeshProps = {
 }
 
 export function GlassMesh(props: GlassMeshProps) {
+  const r = Math.min(props.dimensions[0], props.dimensions[1]) / 2
+
   return (
     <mesh {...props.mesh} position={[0, 0, 0]}>
-      <sphereGeometry args={[props.dimensions[0] / 4]} />
+      <sphereGeometry args={[r]} />
       <meshPhysicalMaterial
-        roughness={0.4}
-        transmission={1}
-        thickness={10}
-        ior={1}
-        reflectivity={0.7}
-        dispersion={10}
-        emissive={0xffffff}
-        emissiveIntensity={0.1}
-        toneMapped={false}
+        roughness={1}
+        transmission={0.6}
+        thickness={r * 2}
+        ior={1.15}
+        dispersion={2}
+        color={0xf8fafc}
+        dithering
+        emissive={0xf8fafc}
+        emissiveIntensity={0.05}
+        // wireframe
       />
     </mesh>
   )

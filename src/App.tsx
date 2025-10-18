@@ -6,6 +6,7 @@ function App() {
     <GlassProvider>
       <h1>Hello World</h1>
       <div
+        glass-ignore=""
         style={{
           display: "flex",
           flexDirection: "column",
@@ -17,33 +18,38 @@ function App() {
           right: 0,
           bottom: 0,
           width: 300,
-          height: 200,
+          height: 500,
         }}
       >
         <Glass options={{}}>
           <div
             style={{
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               flex: 1,
               backgroundColor: "transparent",
             }}
           >
-            <span>ciao!</span>
+            <h2>Real Glass</h2>
+            <span>Rendered with WebGL</span>
           </div>
         </Glass>
         <Glass options={{}} reducedMotion>
           <div
             style={{
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               flex: 1,
               backgroundColor: "transparent",
             }}
           >
-            <span>ciao!</span>
+            <h2>Fallback Glass</h2>
+            <span>Pure CSS with</span>
+            <code>backdrop-filter: blur(6px)</code>
           </div>
         </Glass>
       </div>

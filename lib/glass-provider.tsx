@@ -1,11 +1,11 @@
 import { GlassContext } from "./context"
-import { getTexture, useAwait } from "./utils/hooks"
+import { useBackgroundTexture } from "./utils/hooks"
 
 export type GlassProviderProps = {
   children: React.ReactNode
 }
 
 export function GlassProvider(props: GlassProviderProps) {
-  const texture = useAwait(() => getTexture(document.body))
+  const texture = useBackgroundTexture()
   return <GlassContext.Provider value={{ texture }}>{props.children}</GlassContext.Provider>
 }
