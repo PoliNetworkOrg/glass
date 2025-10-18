@@ -18,7 +18,6 @@ export function BGPlane(props: PlaneMeshProps) {
 
   const scroll = useScroll()
   const ttc = useCallback(() => {
-    console.log("BGPlane scroll")
     invalidate()
     return {
       x: scroll.scrollX.get() - (left + width / 2 - docw / 2),
