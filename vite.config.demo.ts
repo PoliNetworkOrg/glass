@@ -10,13 +10,5 @@ export default defineConfig({
       },
     }),
   ],
-  build: {
-    lib: {
-      entry: "./lib/index.ts",
-      formats: ["es"],
-    },
-    rolldownOptions: {
-      external: ["react", "react/jsx-runtime"],
-    },
-  },
+  base: "/glass/",
 })

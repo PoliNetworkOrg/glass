@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { defaultGlassOptions, type GlassOptions } from "../lib/types/glass"
+import { defaultGlassOptions, type GlassOptions } from "../lib"
 
 export function DemoOptions(props: {
   onChange?: (options: GlassOptions) => void

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:demo": "vite build --config vite.config.demo.ts",
     "lint": "biome check .",
     "preview": "vite preview"
   },

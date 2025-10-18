@@ -1,7 +1,6 @@
 import { useState } from "react"
-import { Glass, GlassProvider } from "../lib"
+import { defaultGlassOptions, Glass, type GlassOptions, GlassProvider } from "../lib"
 import "./App.css"
-import { defaultGlassOptions, type GlassOptions } from "../lib/types/glass"
 import { DemoOptions } from "./options"
 
 const kittens = [
