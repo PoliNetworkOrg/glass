@@ -23,15 +23,8 @@ a:hover {
 }
 
 body {
-  --cell-size: 400px;
-
   margin: 0;
-
-  background-color: #888;
-  background-image: url("/test-pn.jpg");
-  background-position: center;
-  background-size: cover;
-  background-repeat: repeat;
+  background-color: #f0f0f0;
 }
 
 h1 {

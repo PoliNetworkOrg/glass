@@ -1,25 +1,35 @@
 import type { ThreeElements } from "@react-three/fiber"
+import type { GlassOptions } from "./types/glass"
 
 export type GlassMeshProps = {
   dimensions: [number, number, number]
+  color: string
+  options: GlassOptions
   mesh?: ThreeElements["mesh"]
 }
 
 export function GlassMesh(props: GlassMeshProps) {
+  const { options } = props
   const r = Math.min(props.dimensions[0], props.dimensions[1]) / 2
+
+  const roughness = options.frost
+  const transmission = 0.1 + (1 - options.frost) * 0.9
+  const thickness = options.depth * r * 2
+  const ior = options.refraction
+  const dispersion = options.dispersion * 10
 
   return (
     <mesh {...props.mesh} position={[0, 0, 0]}>
-      <sphereGeometry args={[r]} />
+      <sphereGeometry args={[r, 64, 64]} />
       <meshPhysicalMaterial
-        roughness={1}
-        transmission={0.6}
-        thickness={r * 2}
-        ior={1.15}
-        dispersion={2}
-        color={0xf8fafc}
+        roughness={roughness}
+        transmission={transmission}
+        thickness={thickness}
+        ior={ior}
+        dispersion={dispersion}
+        color={props.color}
         dithering
-        emissive={0xf8fafc}
+        emissive={props.color}
         emissiveIntensity={0.05}
         // wireframe
       />

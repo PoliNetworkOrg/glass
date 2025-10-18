@@ -5,33 +5,38 @@ import type { Texture } from "three"
 import { useGlass } from "./context"
 import { GlassMesh } from "./mesh"
 import { BGPlane } from "./plane"
-import type { GlassOptions } from "./types/glass"
+import { defaultGlassOptions, type GlassOptions } from "./types/glass"
 // import { type ElementRect, getElementRect } from "./utils/dimensions"
 
 export type GlassProps = {
   children: React.ReactNode
   options: Partial<GlassOptions>
+  color: string
   reducedMotion?: boolean
 }
 
 function dirFromAngle(angle: number): [number, number, number] {
   const rad = (angle * Math.PI) / 180
-  const x = Math.cos(rad)
-  const y = Math.sin(rad)
+  const x = Math.sin(rad)
+  const y = Math.cos(rad)
   return [x, y, 0]
 }
 
-function Glass3D(props: { texture: Texture; bounds: RectReadOnly }) {
+function Glass3D(props: { color: string; options: GlassOptions; texture: Texture; bounds: RectReadOnly }) {
   // const { width, height } = props.bounds
   const r = Math.min(props.bounds.width, props.bounds.height) / 2
   const width = r * 2
   const height = r * 2
+  const light = props.options.light
+
+  const amb = light.strength * (1 - light.directionality)
+  const dir = light.strength * light.directionality
 
   return (
     <Canvas
       orthographic
       flat
-      fallback={<GlassFallback bounds={props.bounds} />}
+      fallback={<GlassFallback color={props.color} options={props.options} bounds={props.bounds} />}
       camera={{
         position: [0, 0, 512],
         left: -width / 2,
@@ -49,21 +54,25 @@ function Glass3D(props: { texture: Texture; bounds: RectReadOnly }) {
         borderRadius: r,
         zIndex: -1,
         overflow: "hidden",
+        boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
-      <ambientLight intensity={3} />
-      <directionalLight color={0xffffff} position={dirFromAngle(45)} intensity={3} />
-      <GlassMesh dimensions={[width, height, 10]} />
+      <ambientLight color={light.color} intensity={amb} />
+      <directionalLight color={light.color} position={dirFromAngle(light.angle)} intensity={dir} />
+      <GlassMesh color={props.color} dimensions={[width, height, 10]} options={props.options} />
       <BGPlane texture={props.texture} bounds={props.bounds} />
     </Canvas>
   )
 }
 
-function GlassFallback(props: { bounds: RectReadOnly }) {
+function GlassFallback(props: { color: string; options: GlassOptions; bounds: RectReadOnly }) {
   // const { width, height } = props.bounds
   const r = Math.min(props.bounds.width, props.bounds.height) / 2
   const width = r * 2
   const height = r * 2
+  const blur = props.options.frost * 12
+  const light = props.options.light
+  const outlineColor = `rgba(${light.color[0] * 255}, ${light.color[1] * 255}, ${light.color[2] * 255}, ${light.strength / 10})`
 
   return (
     <div
@@ -75,16 +84,17 @@ function GlassFallback(props: { bounds: RectReadOnly }) {
         borderRadius: r,
         zIndex: -1,
         overflow: "hidden",
-        backdropFilter: "blur(6px)",
-        backgroundColor: "#F8FAFCCC",
-        outline: "1px solid white",
+        backdropFilter: `blur(${blur}px)`,
+        backgroundColor: `${props.color}CC`,
+        outline: `1px solid ${outlineColor}`,
+        boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     />
   )
 }
 
 export function Glass(props: GlassProps) {
-  // const { options } = props
+  const options = { ...defaultGlassOptions, ...props.options }
   const [ref, bounds] = useMeasure({ scroll: true })
   const { texture } = useGlass()
   const reducedMotion = useReducedMotion()
@@ -114,10 +124,13 @@ export function Glass(props: GlassProps) {
           width: "100%",
           height: "100%",
           zIndex: -1,
-          outline: "1px solid rgba(0, 0, 0, 0.3)",
         }}
       >
-        {do3D ? <Glass3D texture={texture} bounds={bounds} /> : <GlassFallback bounds={bounds} />}
+        {do3D ? (
+          <Glass3D color={props.color} options={options} texture={texture} bounds={bounds} />
+        ) : (
+          <GlassFallback color={props.color} options={options} bounds={bounds} />
+        )}
       </div>
       {props.children}
     </div>

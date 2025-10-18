@@ -17,7 +17,7 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
-export function useBackgroundTexture() {
+export function useBackgroundTexture(deps: unknown[] = []) {
   const [texture, setTexture] = useState<Texture | null>(null)
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export function useBackgroundTexture() {
     return () => {
       window.removeEventListener("resize", updateTexture)
     }
-  }, [])
+  }, deps)
 
   return texture
 }

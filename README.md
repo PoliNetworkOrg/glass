@@ -32,5 +32,5 @@ apple could never
   - [ ] check webgl support
   - [ ] make sure it does not explode (like profiling maybe?)
 - [ ] accessibility
-  - [ ] stop it when user has reduced motion enabled
+  - [x] stop it when user has reduced motion enabled
   - [ ] increased contrast ?
