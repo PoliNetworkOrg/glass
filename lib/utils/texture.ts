@@ -1,6 +1,11 @@
 import html2canvas from "html2canvas-pro"
 import { CanvasTexture } from "three"
 
+/**
+ * Screenshots the given HTML element and returns a Three.js texture.
+ * @param element HTML Element to screenshot
+ * @returns A Three.js {@link CanvasTexture} holding a screenshot of the element
+ */
 export async function getTexture(element: HTMLElement): Promise<CanvasTexture> {
   const canvas = await html2canvas(element, {
     allowTaint: true,

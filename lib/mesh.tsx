@@ -1,17 +1,26 @@
 import type { ThreeElements } from "@react-three/fiber"
-import type { GlassOptions } from "./types/glass"
+import type { GlassOptions } from "./types"
 
 export type GlassMeshProps = {
+  /** [x, y, z] dimensions of the glass mesh */
   dimensions: [number, number, number]
+  /** Color of the glass material */
   color: string
+  /** Glass material options */
   options: GlassOptions
+  /** Additional mesh props to pass to the glass mesh */
   mesh?: ThreeElements["mesh"]
 }
 
+/**
+ * # GlassMesh
+ * The Three.js mesh for a glass element.
+ */
 export function GlassMesh(props: GlassMeshProps) {
   const { options } = props
-  const r = Math.min(props.dimensions[0], props.dimensions[1]) / 2
+  const r = Math.min(props.dimensions[0], props.dimensions[1]) / 2 // TODO: actual pill geometry
 
+  // Map the options to the physical material properties
   const roughness = options.frost
   const transmission = 0.1 + (1 - options.frost) * 0.9
   const thickness = options.depth * r * 2

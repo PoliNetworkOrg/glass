@@ -6,22 +6,18 @@ import type { Texture } from "three"
 import { useGlass } from "./context"
 import { GlassMesh } from "./mesh"
 import { BGPlane } from "./plane"
-import { defaultGlassOptions, type GlassOptions } from "./types/glass"
+import { defaultGlassOptions, type GlassOptions } from "./types"
 import { useMotionBounds } from "./utils/hooks"
-// import { type ElementRect, getElementRect } from "./utils/dimensions"
+import { dirFromAngle } from "./utils/math"
 
 export type GlassProps = {
   children: React.ReactNode
+  /** Glass material options */
   options: Partial<GlassOptions>
+  /** Color of the glass material */
   color: string
+  /** Force reduce motion (disables 3D glass effect) */
   reducedMotion?: boolean
-}
-
-function dirFromAngle(angle: number): [number, number, number] {
-  const rad = (angle * Math.PI) / 180
-  const x = Math.sin(rad)
-  const y = Math.cos(rad)
-  return [x, y, 0]
 }
 
 type Glass3DProps = {
@@ -67,11 +63,11 @@ function Glass3D(props: Glass3DProps) {
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
-      <Preload all />
       <ambientLight color={light.color} intensity={amb} />
       <directionalLight color={light.color} position={dirFromAngle(light.angle)} intensity={dir} />
       <GlassMesh color={props.color} dimensions={[width, height, 10]} options={props.options} />
       <BGPlane texture={props.texture} bounds={props.bounds} />
+      <Preload all />
     </Canvas>
   )
 }

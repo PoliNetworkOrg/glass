@@ -16,9 +16,9 @@ apple could never
 ## TODO:
 - [ ] reactify the thingy
   - [ ] Error boundaries and Suspense to handle delays
-- [ ] make it responsive
+- [x] make it responsive
   - [x] redo the screenshot on resize
-  - [ ] make it work on zoom
+  - [x] make it work on zoom
 - [ ] create the geometry
   - [ ] box with rounded edges via path extrude
   - [ ] maybe vector math in rust in WASM?

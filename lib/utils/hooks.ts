@@ -1,6 +1,6 @@
 import { useMotionValue } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import useMeasure, { type RectReadOnly } from "react-use-measure"
+import type { RectReadOnly } from "react-use-measure"
 import type { Texture } from "three"
 import { getTexture } from "./texture"
 
@@ -19,6 +19,21 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
+/**
+ *  # useBackgroundTexture
+ * React hook to load and update the background texture based on the document element.
+ *
+ * It uses a ResizeObserver to monitor changes to the document layout and updates
+ * the texture accordingly.
+ *
+ * ### Note
+ * This hook ensures that if multiple updates are triggered in quick succession,
+ * it will only perform the necessary updates to avoid redundant texture loads,
+ * since calling {@link html2canvas} can be quite heavy.
+ *
+ * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
+ * @returns The current background texture, or null if not yet loaded
+ */
 export function useBackgroundTexture(deps: unknown[] = []) {
   const promiseRef = useRef<Promise<Texture> | null>(null) // current texture promise
   const secondRef = useRef<boolean>(false) // flag to indicate if a second update is needed
@@ -68,26 +83,21 @@ export function useBackgroundTexture(deps: unknown[] = []) {
   return texture
 }
 
-// export function useDocumentSize() {
-//   const dom = document.documentElement
-//   const [size, setSize] = useState({
-//     width: dom.scrollWidth,
-//     height: dom.scrollHeight,
-//   })
-
-//   // useLayoutEffect(() => {
-//   //   const observer = new ResizeObserver(() => {
-//   //     setSize({ width: dom.scrollWidth, height: dom.scrollHeight })
-//   //   })
-//   //   observer.observe(document.documentElement)
-//   //   return () => {
-//   //     observer.disconnect()
-//   //   }
-//   // }, [])
-
-//   return size
-// }
-
+/**
+ * # useMotionBounds
+ * Custom hook to track the bounding rectangle of a DOM element using motion values.
+ *
+ * Having the bounds as motion values allows for smooth animations without constant re-renders.
+ *
+ * It accounts for visual viewport offsets and updates on resize and scroll events.
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport
+ *
+ * _The DOM is the biggest threat to performance yet again_
+ *
+ * @return A tuple containing:
+ *   - A ref to be attached to the target DOM element.
+ *   - A MotionValue representing the bounding rectangle of the element.
+ */
 export function useMotionBounds() {
   const motionValues = useMotionValue<RectReadOnly>({
     x: 0,
@@ -99,11 +109,36 @@ export function useMotionBounds() {
     bottom: 0,
     left: 0,
   })
-  const [ref, bounds] = useMeasure({ scroll: true, debounce: 0 })
+  const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    motionValues.set(bounds)
-  }, [bounds])
+    const updatePosition = () => {
+      if (ref.current) {
+        const rect = ref.current.getBoundingClientRect()
+        const { x, y, width, height, top, right, bottom, left } = rect
+        motionValues.set({ x, y, width, height, top, right, bottom, left })
+      }
+    }
+
+    // everything that counld change the element's position or size
+    const observer = new ResizeObserver(updatePosition)
+    if (ref.current) {
+      observer.observe(ref.current)
+      observer.observe(document.documentElement)
+      window.addEventListener("scroll", updatePosition, { passive: true })
+      window.addEventListener("resize", updatePosition, { passive: true })
+      window.visualViewport?.addEventListener("scroll", updatePosition, { passive: true })
+      window.visualViewport?.addEventListener("resize", updatePosition, { passive: true })
+    }
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("scroll", updatePosition)
+      window.removeEventListener("resize", updatePosition)
+      window.visualViewport?.removeEventListener("scroll", updatePosition)
+      window.visualViewport?.removeEventListener("resize", updatePosition)
+    }
+  }, [ref.current])
 
   return [ref, motionValues] as const
 }
