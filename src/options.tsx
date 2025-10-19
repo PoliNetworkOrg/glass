@@ -87,6 +87,10 @@ export function DemoOptions(props: {
           </button>
         </div>
 
+        <a href="https://github.com/PoliNetworkOrg/glass/issues/new" target="_blank" rel="noopener noreferrer">
+          Report a bug
+        </a>
+
         <hr style={{ border: "none", borderTop: "1px solid #444", margin: "32px 0" }} />
 
         {/* Refraction */}

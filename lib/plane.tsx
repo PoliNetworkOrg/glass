@@ -1,34 +1,31 @@
-import { invalidate, type ThreeElements } from "@react-three/fiber"
-import { useAnimationFrame, useScroll } from "motion/react"
-import { useCallback, useRef } from "react"
+import type { ThreeElements } from "@react-three/fiber"
+import { type MotionValue, useAnimationFrame, useScroll } from "motion/react"
+import { useRef } from "react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Mesh, Texture } from "three"
-import { useDocumentSize } from "./utils/hooks"
 
 export type PlaneMeshProps = {
   texture: Texture
-  bounds: RectReadOnly
+  bounds: MotionValue<RectReadOnly>
   mesh?: ThreeElements["mesh"]
 }
 
 export function BGPlane(props: PlaneMeshProps) {
   const plane = useRef<Mesh>(null)
-  const { width: docw, height: doch } = useDocumentSize()
-  const { width, height, left, top } = props.bounds
-
-  const scroll = useScroll()
-  const ttc = useCallback(() => {
-    invalidate()
-    return {
-      x: scroll.scrollX.get() - (left + width / 2 - docw / 2),
-      y: scroll.scrollY.get() + (top + height / 2 - doch / 2),
-    }
-  }, [props.bounds])
+  const { scrollX, scrollY } = useScroll()
 
   useAnimationFrame(() => {
     if (plane.current) {
-      const { x, y } = ttc()
-      plane.current.position.set(x, y, -Math.min(width, height) * 2)
+      const docw = document.documentElement.scrollWidth
+      const doch = document.documentElement.scrollHeight
+      const { width, height, left, top } = props.bounds.get()
+
+      const xoff = left + width / 2 - docw / 2
+      const yoff = top + height / 2 - doch / 2
+
+      plane.current.position.x = scrollX.get() - xoff
+      plane.current.position.y = scrollY.get() + yoff
+      // plane.current.position.z = -Math.min(width, height) * 2
     }
   })
 

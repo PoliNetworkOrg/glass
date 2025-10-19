@@ -1,5 +1,5 @@
 import html2canvas from "html2canvas-pro"
-import { CanvasTexture, ClampToEdgeWrapping, Texture } from "three"
+import { CanvasTexture } from "three"
 
 export async function getTexture(element: HTMLElement): Promise<CanvasTexture> {
   const canvas = await html2canvas(element, {
@@ -7,7 +7,7 @@ export async function getTexture(element: HTMLElement): Promise<CanvasTexture> {
     useCORS: true,
     logging: false,
     imageTimeout: 2000,
-    scale: window.devicePixelRatio,
+    scale: 1,
     x: window.scrollX,
     y: window.scrollY,
 
@@ -22,5 +22,5 @@ export async function getTexture(element: HTMLElement): Promise<CanvasTexture> {
       return false
     },
   })
-  return new CanvasTexture(canvas, Texture.DEFAULT_MAPPING, ClampToEdgeWrapping, ClampToEdgeWrapping)
+  return new CanvasTexture(canvas)
 }
