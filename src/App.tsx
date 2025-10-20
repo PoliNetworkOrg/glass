@@ -1,5 +1,5 @@
+import { defaultGlassOptions, Glass, type GlassOptions, GlassProvider } from "@polinetwork/glass"
 import { useState } from "react"
-import { defaultGlassOptions, Glass, type GlassOptions, GlassProvider } from "../lib"
 import "./App.css"
 import { DemoOptions } from "./options"
 

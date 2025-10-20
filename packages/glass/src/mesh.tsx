@@ -29,8 +29,18 @@ export function GlassMesh(props: GlassMeshProps) {
 
   return (
     <mesh {...props.mesh} position={[0, 0, 0]}>
-      <sphereGeometry args={[r, 64, 64]} />
+      <sphereGeometry args={[r, 256, 256]} />
       <meshPhysicalMaterial
+        // attenuationColor={[0.1, 0.1, 0.1]}
+        // attenuationDistance={1000}
+        // iridescence={0.7}
+        // iridescenceIOR={1.5}
+        // anisotropy={1}
+        // sheen={0.5}
+        // sheenColor={[1, 1, 1]}
+        // sheenRoughness={0.5}
+        // clearcoat={0.3}
+        // clearcoatRoughness={0.3}
         roughness={roughness}
         transmission={transmission}
         thickness={thickness}
@@ -40,7 +50,6 @@ export function GlassMesh(props: GlassMeshProps) {
         dithering
         emissive={props.color}
         emissiveIntensity={0.05}
-        // wireframe
       />
     </mesh>
   )

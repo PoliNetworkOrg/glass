@@ -1,26 +1,22 @@
 {
-  "name": "@polinetwork/glass",
-  "version": "0.1.0",
+  "name": "glass",
+  "version": "0.0.0",
   "type": "module",
   "author": "PoliNetwork APS",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "pnpm run build:pkg && pnpm run build:demo",
+    "build:pkg": "cd packages/glass && pnpm run build",
     "build:demo": "vite build --config vite.config.demo.ts",
+    "pub": "cd packages/glass && pnpm publish --access public",
     "lint": "biome check .",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.6",
-    "@react-three/fiber": "^9.4.0",
-    "@types/three": "^0.180.0",
-    "html2canvas-pro": "^1.5.12",
-    "motion": "^12.23.24",
+    "@polinetwork/glass": "file:./packages/glass",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-use-measure": "^2.1.7",
-    "three": "^0.180.0"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.6",

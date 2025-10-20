@@ -111,6 +111,18 @@ export function useMotionBounds() {
   })
   const ref = useRef<HTMLDivElement | null>(null)
 
+  // // the offsets in size for the visual viewport, or safari stutters like crazy
+  // // thanks, apple
+  // const vpOffsets = useMotionValue({ w: 0, h: 0 })
+  // useAnimationFrame(() => {
+  //   if (window.visualViewport) {
+  //     vpOffsets.set({
+  //       w: window.visualViewport.width - window.innerWidth,
+  //       h: window.visualViewport.height - window.innerHeight,
+  //     })
+  //   }
+  // })
+
   useEffect(() => {
     const updatePosition = () => {
       if (ref.current) {
@@ -139,6 +151,21 @@ export function useMotionBounds() {
       window.visualViewport?.removeEventListener("resize", updatePosition)
     }
   }, [ref.current])
+
+  // const bounds = useTransform(() => {
+  //   const offsets = vpOffsets.get()
+  //   const rect = motionValues.get()
+  //   return {
+  //     x: rect.x + offsets.w / 2,
+  //     y: rect.y + offsets.h / 2,
+  //     width: rect.width,
+  //     height: rect.height,
+  //     top: rect.top + offsets.h / 2,
+  //     right: rect.right + offsets.w / 2,
+  //     bottom: rect.bottom + offsets.h / 2,
+  //     left: rect.left + offsets.w / 2,
+  //   }
+  // })
 
   return [ref, motionValues] as const
 }
