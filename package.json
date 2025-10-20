@@ -6,15 +6,13 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm run build:pkg && pnpm run build:demo",
-    "build:pkg": "cd packages/glass && pnpm install && pnpm run build",
-    "build:demo": "vite build",
+    "build": "vite build",
     "pub": "cd packages/glass && pnpm publish --access public",
     "lint": "biome check .",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@polinetwork/glass": "file:./packages/glass",
+    "@polinetwork/glass": "workspace:*packages/glass",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.7",

@@ -13,6 +13,7 @@
   "scripts": {
     "watch": "vite build --watch",
     "build": "tsc -b && vite build",
+    "postinstall": "pnpm run build",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
