@@ -4,16 +4,16 @@ import { type MotionValue, useReducedMotion } from "motion/react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Texture } from "three"
 import { useGlass } from "./context"
+import { SceneLights } from "./lights"
 import { GlassMesh } from "./mesh"
 import { BGPlane } from "./plane"
-import { defaultGlassOptions, type GlassOptions } from "./types"
+import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useMotionBounds } from "./utils/hooks"
-import { dirFromAngle } from "./utils/math"
 
 export type GlassProps = {
   children: React.ReactNode
   /** Glass material options */
-  options: Partial<GlassOptions>
+  options: Partial<SceneConfig>
   /** Color of the glass material */
   color: string
   /** Force reduce motion (disables 3D glass effect) */
@@ -22,7 +22,7 @@ export type GlassProps = {
 
 type Glass3DProps = {
   color: string
-  options: GlassOptions
+  options: SceneConfig
   texture: Texture
   bounds: MotionValue<RectReadOnly>
 }
@@ -32,10 +32,7 @@ function Glass3D(props: Glass3DProps) {
   const r = Math.min(props.bounds.get().width, props.bounds.get().height) / 2
   const width = r * 2
   const height = r * 2
-  const light = props.options.light
-
-  const amb = light.strength * (1 - light.directionality)
-  const dir = light.strength * light.directionality
+  const light = props.options.lighting
 
   return (
     <Canvas
@@ -63,9 +60,8 @@ function Glass3D(props: Glass3DProps) {
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
-      <ambientLight color={light.color} intensity={amb} />
-      <directionalLight color={light.color} position={dirFromAngle(light.angle)} intensity={dir} />
-      <GlassMesh color={props.color} dimensions={[width, height, 10]} options={props.options} />
+      <SceneLights settings={light} />
+      <GlassMesh color={props.color} dimensions={[width, height, 10]} options={props.options.material} />
       <BGPlane texture={props.texture} bounds={props.bounds} />
       <Preload all />
     </Canvas>
@@ -74,18 +70,18 @@ function Glass3D(props: Glass3DProps) {
 
 type GlassFallbackProps = {
   color: string
-  options: GlassOptions
+  options: SceneConfig
   bounds: MotionValue<RectReadOnly>
 }
 
 function GlassFallback(props: GlassFallbackProps) {
+  const { material, lighting } = props.options
   // const { width, height } = props.bounds
   const r = Math.min(props.bounds.get().width, props.bounds.get().height) / 2
   const width = r * 2
   const height = r * 2
-  const blur = props.options.frost * 12
-  const light = props.options.light
-  const outlineColor = `rgba(${light.color[0] * 255}, ${light.color[1] * 255}, ${light.color[2] * 255}, ${light.strength / 10})`
+  const blur = material.roughness * 12
+  const outlineColor = `rgba(${lighting.ambient.color[0] * 255}, ${lighting.ambient.color[1] * 255}, ${lighting.ambient.color[2] * 255}, ${lighting.ambient.intensity / 10})`
 
   return (
     <div
@@ -107,7 +103,7 @@ function GlassFallback(props: GlassFallbackProps) {
 }
 
 export function Glass(props: GlassProps) {
-  const options = { ...defaultGlassOptions, ...props.options }
+  const options = SceneConfigSchema.parse(props.options)
   const [ref, bounds] = useMotionBounds()
   const { texture } = useGlass()
   const reducedMotion = useReducedMotion()

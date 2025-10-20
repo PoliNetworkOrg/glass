@@ -1,9 +1,9 @@
-import { defaultGlassOptions, Glass, type GlassOptions, GlassProvider } from "@polinetwork/glass"
+import { Glass, GlassProvider, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
 import { useState } from "react"
 import "./App.css"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DemoOptions } from "./options"
+import { DemoOptions, getDefaultValues } from "./options"
 
 const kittens = [
   {
@@ -33,8 +33,10 @@ const kittens = [
   },
 ]
 
+const defaultConfig = getDefaultValues(SceneConfigSchema)
+
 function App() {
-  const [glassOptions, setGlassOptions] = useState<GlassOptions>(defaultGlassOptions)
+  const [glassOptions, setGlassOptions] = useState<SceneConfig>(SceneConfigSchema.parse(defaultConfig))
   const [isDarkMode, setIsDarkMode] = useState(false)
 
   const glassColor = isDarkMode ? "#3b6175" : "#F8FAFC"
@@ -58,7 +60,7 @@ function App() {
               <div className="flex flex-col items-center justify-center flex-1 text-foreground">
                 <h2 className="text-2xl font-bold">Fallback Glass</h2>
                 <span className="text-sm text-muted-foreground">Pure CSS</span>
-                <code className="text-xs mt-2">blur: {(glassOptions.frost * 12).toFixed(1)}px</code>
+                <code className="text-xs mt-2">blur: {(glassOptions.material.roughness * 12).toFixed(1)}px</code>
               </div>
             </Glass>
           </div>

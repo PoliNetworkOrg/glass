@@ -1,5 +1,6 @@
 import type { ThreeElements } from "@react-three/fiber"
-import type { GlassOptions } from "./types"
+import type { GlassConfig } from "./types/schemas"
+import { createPhysicalMaterialParams } from "./utils/material"
 
 export type GlassMeshProps = {
   /** [x, y, z] dimensions of the glass mesh */
@@ -7,7 +8,7 @@ export type GlassMeshProps = {
   /** Color of the glass material */
   color: string
   /** Glass material options */
-  options: GlassOptions
+  options: GlassConfig
   /** Additional mesh props to pass to the glass mesh */
   mesh?: ThreeElements["mesh"]
 }
@@ -19,38 +20,12 @@ export type GlassMeshProps = {
 export function GlassMesh(props: GlassMeshProps) {
   const { options } = props
   const r = Math.min(props.dimensions[0], props.dimensions[1]) / 2 // TODO: actual pill geometry
-
-  // Map the options to the physical material properties
-  const roughness = options.frost
-  const transmission = 0.1 + (1 - options.frost) * 0.9
-  const thickness = options.depth * r * 2
-  const ior = options.refraction
-  const dispersion = options.dispersion * 10
+  const materialParams = createPhysicalMaterialParams(options, r * 2)
 
   return (
     <mesh {...props.mesh} position={[0, 0, 0]}>
       <sphereGeometry args={[r, 256, 256]} />
-      <meshPhysicalMaterial
-        // attenuationColor={[0.1, 0.1, 0.1]}
-        // attenuationDistance={1000}
-        // iridescence={0.7}
-        // iridescenceIOR={1.5}
-        // anisotropy={1}
-        // sheen={0.5}
-        // sheenColor={[1, 1, 1]}
-        // sheenRoughness={0.5}
-        // clearcoat={0.3}
-        // clearcoatRoughness={0.3}
-        roughness={roughness}
-        transmission={transmission}
-        thickness={thickness}
-        ior={ior}
-        dispersion={dispersion}
-        color={props.color}
-        dithering
-        emissive={props.color}
-        emissiveIntensity={0.05}
-      />
+      <meshPhysicalMaterial {...materialParams} dithering />
     </mesh>
   )
 }
