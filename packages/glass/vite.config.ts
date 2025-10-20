@@ -8,11 +8,7 @@ import dts from "vite-plugin-dts"
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react({
-      babel: {
-        plugins: [["babel-plugin-react-compiler"]],
-      },
-    }),
+    react(),
     dts({
       tsconfigPath: "tsconfig.lib.json",
     }),
@@ -24,15 +20,8 @@ export default defineConfig({
       fileName: "index",
       formats: ["es"],
     },
-    rolldownOptions: {
+    rollupOptions: {
       external: ["react", "react-dom", "react/jsx-runtime"],
-      output: {
-        globals: {
-          react: "React",
-          "react-dom": "React-dom",
-          "react/jsx-runtime": "react/jsx-runtime",
-        },
-      },
     },
   },
 })

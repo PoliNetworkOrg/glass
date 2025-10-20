@@ -57,11 +57,9 @@ export function useBackgroundTexture(deps: unknown[] = []) {
   const dispatchUpdate = useCallback(() => {
     if (!promiseRef.current) {
       // if no update is in progress, start one
-      console.log("First time updating texture")
       void updateTexture()
     } else {
       // if an update is already in progress, mark for a second update
-      console.log("Marking for second update")
       secondRef.current = true
     }
   }, [updateTexture])

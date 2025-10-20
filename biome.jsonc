@@ -3,7 +3,16 @@
   "vcs": { "enabled": false, "clientKind": "git", "useIgnoreFile": false },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["./src/**", "./*.ts", "./packages/*.ts", "./packages/**/src/**"]
+    "includes": [
+      "src/**",
+      "*.ts",
+      "packages/*.ts",
+      "packages/**/src/**",
+      "*.json",
+      "*.jsonc",
+      "!src/index.css",
+      "!src/components/ui"
+    ]
   },
   "formatter": {
     "enabled": true,
