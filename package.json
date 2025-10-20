@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "pnpm run build:pkg && pnpm run build:demo",
     "build:pkg": "cd packages/glass && pnpm run build",
-    "build:demo": "vite build --config vite.config.demo.ts",
+    "build:demo": "vite build",
     "pub": "cd packages/glass && pnpm publish --access public",
     "lint": "biome check .",
     "preview": "vite preview"

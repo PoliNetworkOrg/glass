@@ -1,5 +1,5 @@
+import { defaultGlassOptions, type GlassOptions } from "@polinetwork/glass"
 import { useEffect, useState } from "react"
-import { defaultGlassOptions, type GlassOptions } from "../lib"
 
 export function DemoOptions(props: {
   onChange?: (options: GlassOptions) => void
