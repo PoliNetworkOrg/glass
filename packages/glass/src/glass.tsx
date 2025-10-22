@@ -1,4 +1,5 @@
 import { useReducedMotion } from "motion/react"
+import { Suspense } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { useGlass } from "./context"
@@ -15,6 +16,18 @@ export type GlassProps = {
   disable3D?: boolean
 } & React.HTMLAttributes<HTMLDivElement>
 
+/**
+ * # Glass
+ *
+ * A React component that renders a glass effect underneath its children.
+ *
+ * This component is intended to be used as a div, whose background will be
+ * rendered with a glass effect. It uses Three.js and React Three Fiber to create
+ * the 3D effect.
+ *
+ * When 3D rendering is not available (due to user preferences or performance constraints),
+ * it falls back to a simpler glass effect using pure CSS.
+ */
 export function Glass(props: GlassProps) {
   const { children, options, color, disable3D, ...rest } = props
   const scene = SceneConfigSchema.parse(options)
@@ -62,7 +75,13 @@ export function Glass(props: GlassProps) {
           zIndex: -1,
         }}
       >
-        {do3D ? <Glass3D {...commonProps} texture={texture} /> : <GlassFallback {...commonProps} />}
+        {do3D ? (
+          <Suspense fallback={<GlassFallback {...commonProps} />}>
+            <Glass3D {...commonProps} texture={texture} />
+          </Suspense>
+        ) : (
+          <GlassFallback {...commonProps} />
+        )}
       </div>
       {children}
     </div>

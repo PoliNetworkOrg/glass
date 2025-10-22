@@ -19,8 +19,8 @@ apple could never
 - [x] make it responsive
   - [x] redo the screenshot on resize
   - [x] make it work on zoom
-- [ ] create the geometry
-  - [ ] box with rounded edges via path extrude
+- [x] create the geometry
+  - [x] box with rounded edges via path extrude
   - [ ] maybe vector math in rust in WASM?
 - [x] do the glass thing
   - [x] frost !
@@ -29,8 +29,8 @@ apple could never
   - [x] fresnel 
   - [x] chromatic aberration ?
 - [ ] performance
-  - [ ] check webgl support
+  - [x] check webgl support
   - [ ] make sure it does not explode (like profiling maybe?)
-- [ ] accessibility
+- [x] accessibility
   - [x] stop it when user has reduced motion enabled
-  - [ ] increased contrast ?
+  - [x] increased contrast ?

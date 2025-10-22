@@ -1,8 +1,9 @@
-import { Preload } from "@react-three/drei"
+import { Preload, Stats, useDetectGPU } from "@react-three/drei"
 import { Canvas } from "@react-three/fiber"
 import { motion, useMotionValueEvent, useTransform } from "motion/react"
 import { useCallback, useMemo } from "react"
 import { OrthographicCamera, type Texture } from "three"
+import { useFailCondition } from "../utils/hooks"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
 import { SceneLights } from "./lights"
 import { GlassMesh } from "./mesh"
@@ -16,6 +17,11 @@ const MotCanv = motion.create(Canvas)
 
 export function Glass3D(props: Glass3DProps) {
   const { lighting, material, plane } = props.scene
+  const gpu = useDetectGPU({
+    failIfMajorPerformanceCaveat: true,
+  })
+  useFailCondition(() => gpu.tier < 2)
+
   const width = useTransform(() => props.bounds.get().width)
   const height = useTransform(() => props.bounds.get().height)
 
@@ -58,10 +64,11 @@ export function Glass3D(props: Glass3DProps) {
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
+      <Stats showPanel={0} />
+
       <SceneLights settings={lighting} />
       <GlassMesh color={props.color} width={width} height={height} borderRadius={16} options={material} />
       <BGPlane texture={props.texture} bounds={props.bounds} options={plane} />
-      {/* <Environment preset="apartment" background backgroundBlurriness={1} /> */}
       <Preload all />
     </MotCanv>
   )

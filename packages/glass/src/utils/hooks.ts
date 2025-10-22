@@ -168,6 +168,12 @@ export function useMotionBounds() {
   return [ref, motionValues] as const
 }
 
+/**
+ * # useReducedMotion
+ * Simple hook to detect if the user has requested increased contrast.
+ *
+ * @returns true if the user has set a preference for increased contrast
+ */
 export function useIncreasedContrast() {
   const [increasedContrast, setIncreasedContrast] = useState(false)
 
@@ -188,6 +194,14 @@ export function useIncreasedContrast() {
   return increasedContrast
 }
 
+/**
+ * # useComputedStyle
+ *
+ * React hook to compute a value based on the computed style of a DOM element.
+ *
+ * @param transform callback function to create a value from the computed style of the element
+ * @returns a tuple, with a ref for the element whose style needs to be referenced and the transformed value
+ */
 export function useComputedStyle<T extends HTMLElement, R>(transform: (style: CSSStyleDeclaration) => R) {
   const ref = useRef<T | null>(null)
   const [computed, setComputed] = useState<R | null>(null)
@@ -201,4 +215,25 @@ export function useComputedStyle<T extends HTMLElement, R>(transform: (style: CS
   }, [ref.current])
 
   return [ref, computed] as const
+}
+
+/**
+ * # useFailCondition
+ * React hook to trigger a suspense fail condition based on a dynamic check.
+ *
+ * @param check A function that returns a boolean indicating whether to trigger
+ * the fail condition
+ */
+export function useFailCondition(check: () => boolean) {
+  const condition = check()
+  const suspenderRef = useRef<Promise<never> | null>(null)
+
+  if (condition) {
+    if (!suspenderRef.current) {
+      suspenderRef.current = new Promise<never>(() => {})
+    }
+    throw suspenderRef.current
+  } else {
+    suspenderRef.current = null
+  }
 }
