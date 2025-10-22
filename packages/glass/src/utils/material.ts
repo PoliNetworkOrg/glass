@@ -11,7 +11,6 @@ export function createPhysicalMaterialParams(
     color: new THREE.Color(...m.color),
     roughness: m.roughness,
     ior: m.ior,
-    reflectivity: m.reflectivity,
     dispersion: m.dispersion,
   }
 
@@ -46,10 +45,10 @@ export function createPhysicalMaterialParams(
     params.iridescenceIOR = m.iridescence.ior
   }
 
-  // --- Emissive ---
-  if (m.emissive?.enabled) {
-    params.emissive = new THREE.Color(...m.emissive.color)
-    params.emissiveIntensity = m.emissive.intensity
+  // --- Emission ---
+  if (m.emission?.enabled) {
+    params.emissive = new THREE.Color(...m.emission.color)
+    params.emissiveIntensity = m.emission.intensity
   }
 
   return params

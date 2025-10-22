@@ -1,5 +1,5 @@
 import { useMotionValue } from "motion/react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Texture } from "three"
 import { getTexture } from "./texture"
@@ -34,14 +34,14 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
  * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
  * @returns The current background texture, or null if not yet loaded
  */
-export function useBackgroundTexture(deps: unknown[] = []) {
+export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Texture | null {
   const promiseRef = useRef<Promise<Texture> | null>(null) // current texture promise
   const secondRef = useRef<boolean>(false) // flag to indicate if a second update is needed
   const [texture, setTexture] = useState<Texture | null>(null)
 
   const updateTexture = useCallback(async () => {
     secondRef.current = false // reset second update flag
-    promiseRef.current = getTexture(document.documentElement) // start new texture promise
+    promiseRef.current = getTexture(document.documentElement, blur) // start new texture promise
     const tex = await promiseRef.current // wait for texture to be ready
     promiseRef.current = null // clear current promise
 
@@ -51,7 +51,7 @@ export function useBackgroundTexture(deps: unknown[] = []) {
     } else {
       setTexture(tex)
     }
-  }, [])
+  }, [blur])
 
   // Function to dispatch texture update
   const dispatchUpdate = useCallback(() => {
@@ -166,4 +166,39 @@ export function useMotionBounds() {
   // })
 
   return [ref, motionValues] as const
+}
+
+export function useIncreasedContrast() {
+  const [increasedContrast, setIncreasedContrast] = useState(false)
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(prefers-contrast: more)")
+    setIncreasedContrast(mq.matches)
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIncreasedContrast(event.matches)
+    }
+
+    mq.addEventListener("change", handleChange)
+    return () => {
+      mq.removeEventListener("change", handleChange)
+    }
+  }, [])
+
+  return increasedContrast
+}
+
+export function useComputedStyle<T extends HTMLElement, R>(transform: (style: CSSStyleDeclaration) => R) {
+  const ref = useRef<T | null>(null)
+  const [computed, setComputed] = useState<R | null>(null)
+
+  useLayoutEffect(() => {
+    if (ref.current) {
+      const style = window.getComputedStyle(ref.current)
+      const result = transform(style)
+      setComputed(result)
+    }
+  }, [ref.current])
+
+  return [ref, computed] as const
 }

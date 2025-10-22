@@ -26,7 +26,8 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@polinetwork/glass": ["./packages/glass/src/index.ts"]
     }
   },
   "include": ["src"]

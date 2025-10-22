@@ -1,16 +1,17 @@
-import type { ThreeElements } from "@react-three/fiber"
+import { Plane } from "@react-three/drei"
 import { type MotionValue, useAnimationFrame, useScroll } from "motion/react"
 import { useRef } from "react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Mesh, Texture } from "three"
+import type { PlaneConfig } from "../types/schemas"
 
 export type PlaneMeshProps = {
   /** The texture containing a screenshot of the document */
   texture: Texture
   /** The motion value containing the bounds of the element, updated outside of react */
   bounds: MotionValue<RectReadOnly>
-  /** Additional mesh props to pass to the plane mesh */
-  mesh?: ThreeElements["mesh"]
+
+  options: PlaneConfig
 }
 
 /**
@@ -46,11 +47,9 @@ export function BGPlane(props: PlaneMeshProps) {
     }
   })
 
-  // Create a mesh with a simple plane geometry and basic material using the texture
   return (
-    <mesh ref={plane} {...props.mesh}>
-      <planeGeometry args={[props.texture.width, props.texture.height]} />
+    <Plane ref={plane} position={[0, 0, -1000]} args={[props.texture.width, props.texture.height]}>
       <meshBasicMaterial map={props.texture} />
-    </mesh>
+    </Plane>
   )
 }

@@ -3,7 +3,8 @@ import { useState } from "react"
 import "./App.css"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DemoOptions, getDefaultValues } from "./options"
+import { DemoOptions } from "./options"
+import { getDefaultValues } from "./options/utils"
 
 const kittens = [
   {
@@ -42,26 +43,35 @@ function App() {
   const glassColor = isDarkMode ? "#3b6175" : "#F8FAFC"
 
   return (
-    <GlassProvider deps={[isDarkMode]}>
+    <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur}>
       <div className={isDarkMode ? "dark" : ""}>
         <div className="min-h-screen bg-background">
           {/* Demo Glass Elements */}
           <div
             glass-ignore=""
-            className="fixed inset-0 m-auto z-10 flex flex-col gap-8 w-[300px] h-[600px] pointer-events-none"
+            className="fixed inset-0 m-auto z-10 flex flex-col gap-4 w-[500px] h-[500px] border-2 p-4 text-shadow-xl"
+            style={{
+              resize: "both",
+              overflow: "hidden",
+            }}
           >
-            <Glass color={glassColor} options={glassOptions}>
-              <div className="flex flex-col items-center justify-center flex-1 text-foreground">
-                <h2 className="text-2xl font-bold">Real Glass</h2>
-                <span className="text-sm text-muted-foreground">Rendered with WebGL</span>
-              </div>
+            <Glass
+              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl overflow-hidden"
+              color={glassColor}
+              options={glassOptions}
+            >
+              <h2 className="text-2xl font-bold">Real Glass</h2>
+              <span className="text-sm text-muted-foreground">Rendered with WebGL</span>
             </Glass>
-            <Glass color={glassColor} options={glassOptions} reducedMotion>
-              <div className="flex flex-col items-center justify-center flex-1 text-foreground">
-                <h2 className="text-2xl font-bold">Fallback Glass</h2>
-                <span className="text-sm text-muted-foreground">Pure CSS</span>
-                <code className="text-xs mt-2">blur: {(glassOptions.material.roughness * 12).toFixed(1)}px</code>
-              </div>
+            <Glass
+              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl overflow-hidden"
+              color={glassColor}
+              options={glassOptions}
+              disable3D
+            >
+              <h2 className="text-2xl font-bold">Fallback Glass</h2>
+              <span className="text-sm text-muted-foreground">Pure CSS</span>
+              <code className="text-xs mt-2">blur: {(glassOptions.material.roughness * 12).toFixed(1)}px</code>
             </Glass>
           </div>
 

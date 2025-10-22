@@ -1,6 +1,6 @@
 import { useMemo } from "react"
-import type { SceneConfig } from "./types/schemas"
-import { dirFromAngle } from "./utils/math"
+import type { SceneConfig } from "../types/schemas"
+import { dirFromAngle } from "../utils/math"
 
 type LightingProps = {
   settings: SceneConfig["lighting"]

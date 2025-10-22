@@ -5,6 +5,8 @@ export type GlassProviderProps = {
   children: React.ReactNode
   /** Dependency array for the background texture, changes will trigger a re-fetch */
   deps?: unknown[]
+  /** Blur amount for the background texture */
+  blur?: number
 }
 
 /**
@@ -14,6 +16,6 @@ export type GlassProviderProps = {
  * Handles fetching and updating the background texture based on the provided dependencies.
  */
 export function GlassProvider(props: GlassProviderProps) {
-  const texture = useBackgroundTexture(props.deps)
+  const texture = useBackgroundTexture(props.deps, props.blur)
   return <GlassContext.Provider value={{ texture }}>{props.children}</GlassContext.Provider>
 }

@@ -23,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "color": "^5.0.2",
+    "leva": "^0.10.0",
     "lucide-react": "^0.546.0",
     "radix-ui": "^1.4.3",
     "react": "^19.1.1",

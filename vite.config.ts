@@ -9,7 +9,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@polinetwork/glass": path.resolve(__dirname, "./packages/glass/src/index.ts"),
     },
   },
   base: "/glass/",
+  optimizeDeps: {
+    exclude: ["@polinetwork/glass"],
+  },
 })
