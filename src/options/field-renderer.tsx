@@ -117,17 +117,15 @@ export function FieldRenderer<T extends z.ZodType>({ schema: sk, value, path, on
         <Separator />
         <h2 className="font-semibold">{label}</h2>
         {Object.keys(shape).map((key) => (
-          <>
-            <FieldRenderer
-              key={`${path.join(".")}-${key}`}
-              schema={shape[key]}
-              value={objValue[key] as z.infer<(typeof shape)[typeof key]>}
-              path={[...path, key]}
-              onChange={(newValue) => {
-                cb({ ...objValue, [key]: newValue })
-              }}
-            />
-          </>
+          <FieldRenderer
+            key={`${path.join(".")}-${key}`}
+            schema={shape[key]}
+            value={objValue[key] as z.infer<(typeof shape)[typeof key]>}
+            path={[...path, key]}
+            onChange={(newValue) => {
+              cb({ ...objValue, [key]: newValue })
+            }}
+          />
         ))}
       </div>
     )
