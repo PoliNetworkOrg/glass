@@ -1,5 +1,5 @@
-import { Preload, Stats, useDetectGPU } from "@react-three/drei"
-import { Canvas } from "@react-three/fiber"
+import { AdaptiveDpr, AdaptiveEvents, Preload, Stats, useDetectGPU } from "@react-three/drei"
+import { Canvas, invalidate } from "@react-three/fiber"
 import { motion, useMotionValueEvent, useTransform } from "motion/react"
 import { useCallback, useMemo } from "react"
 import { OrthographicCamera, type Texture } from "three"
@@ -16,11 +16,15 @@ export type Glass3DProps = GlassFallbackProps & {
 const MotCanv = motion.create(Canvas)
 
 export function Glass3D(props: Glass3DProps) {
+  // const [isSuspended, setIsSuspended] = useState(true)
   const { lighting, material, plane } = props.scene
   const gpu = useDetectGPU({
     failIfMajorPerformanceCaveat: true,
   })
   useFailCondition(() => gpu.tier < 2)
+
+  // const texture = suspend(getTexture, [document.documentElement, 0])
+  const texture = props.texture
 
   const width = useTransform(() => props.bounds.get().width)
   const height = useTransform(() => props.bounds.get().height)
@@ -34,6 +38,7 @@ export function Glass3D(props: Glass3DProps) {
   }, [width, height])
 
   const updateCamera = useCallback(() => {
+    invalidate()
     const w = width.get()
     const h = height.get()
     camera.left = -w / 2
@@ -53,7 +58,7 @@ export function Glass3D(props: Glass3DProps) {
       fallback={<GlassFallback {...props} />}
       dpr={1}
       camera={camera}
-      // frameloop="demand"
+      frameloop="demand"
       style={{
         width: "100%",
         height: "100%",
@@ -64,11 +69,12 @@ export function Glass3D(props: Glass3DProps) {
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
-      <Stats showPanel={0} />
-
+      <Stats showPanel={1} />
+      <AdaptiveDpr />
+      <AdaptiveEvents />
       <SceneLights settings={lighting} />
       <GlassMesh color={props.color} width={width} height={height} borderRadius={16} options={material} />
-      <BGPlane texture={props.texture} bounds={props.bounds} options={plane} />
+      <BGPlane texture={texture} bounds={props.bounds} options={plane} />
       <Preload all />
     </MotCanv>
   )

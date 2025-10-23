@@ -126,6 +126,9 @@ importers:
       react-use-measure:
         specifier: ^2.1.7
         version: 2.1.7(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      suspend-react:
+        specifier: ^0.1.3
+        version: 0.1.3(react@19.2.0)
       three:
         specifier: ^0.180.0
         version: 0.180.0

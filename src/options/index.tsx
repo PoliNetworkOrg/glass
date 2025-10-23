@@ -134,19 +134,19 @@ export function DemoOptions(props: {
     resolution: {
       min: 16,
       max: 1024,
-      value: 128,
+      value: 256,
       step: 16,
     },
     backsideResolution: {
       min: 16,
       max: 1024,
-      value: 128,
+      value: 256,
       step: 16,
     },
     samples: {
       min: 1,
       max: 64,
-      value: 8,
+      value: 16,
       step: 1,
     },
   })

@@ -39,25 +39,25 @@ export function GlassMesh(props: GlassMeshProps) {
   useMotionValueEvent(props.width, "change", updateGeometry)
   useMotionValueEvent(props.height, "change", updateGeometry)
 
-  const shape = useMemo(() => createRoundedRect(startingWidth - 32, startingHeight - 32, props.borderRadius), [])
-
-  const extrudeSettings = useMemo<ExtrudeGeometryOptions>(
-    () => ({
+  const args = useMemo<[Shape[], ExtrudeGeometryOptions]>(() => {
+    const bevelSize = props.borderRadius / 2 + 16
+    const shape = createRoundedRect(
+      startingWidth - bevelSize * 2,
+      startingHeight - bevelSize * 2,
+      props.borderRadius / 2
+    )
+    const extrudeSettings: ExtrudeGeometryOptions = {
       steps: 1,
       depth: 0,
       bevelEnabled: true,
       curveSegments: 32,
       bevelSegments: 32,
       bevelThickness: 16,
-      bevelSize: 16,
+      bevelSize,
       bevelOffset: 0,
-    }),
-    []
-  )
-  const args = useMemo<[Shape[], ExtrudeGeometryOptions]>(
-    () => [shape.toShapes(false), extrudeSettings],
-    [shape, extrudeSettings]
-  )
+    }
+    return [shape.toShapes(false), extrudeSettings]
+  }, [props.borderRadius, startingWidth, startingHeight])
 
   return (
     <Extrude ref={geom} position={[0, 0, 0]} args={args}>
