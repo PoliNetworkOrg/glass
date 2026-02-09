@@ -152,7 +152,7 @@ export function DemoOptions(props: {
   })
   const defaultConfig = getDefaultValues(SceneConfigSchema)
   const [scf, setConfig] = useState<SceneConfig>(defaultConfig)
-  const [isVisible, setIsVisible] = useState(true)
+  const [isVisible, setIsVisible] = useState(false)
   const config = { ...scf, material }
 
   useEffect(() => {

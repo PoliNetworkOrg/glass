@@ -1,6 +1,7 @@
 import { Glass, GlassProvider, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
 import { useState } from "react"
 import "./App.css"
+import { Leva } from "leva"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DemoOptions } from "./options"
@@ -43,9 +44,9 @@ function App() {
   const glassColor = isDarkMode ? "#3b6175" : "#F8FAFC"
 
   return (
-    <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur}>
+    <GlassProvider deps={[isDarkMode]}>
       <div className={isDarkMode ? "dark" : ""}>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen root-bg">
           {/* Demo Glass Elements */}
           <div
             glass-ignore=""
@@ -55,6 +56,7 @@ function App() {
               overflow: "hidden",
             }}
           >
+            <Leva glass-ignore="" oneLineLabels titleBar={{ title: "Render Options" }} />
             <Glass
               className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl overflow-hidden"
               color={glassColor}
@@ -176,6 +178,32 @@ function App() {
                   </Button>
                 </CardContent>
               </Card>
+            </section>
+
+            {/* Glass Interaction */}
+            <section className="text-center space-y-4">
+              <div className="flex center">
+                <Glass
+                  className="w-64 h-64 flex items-center justify-center rounded-4xl mx-auto"
+                  color={glassColor}
+                  options={glassOptions}
+                >
+                  <div>
+                    <h2 className="text-2xl font-bold">Interactive Glass</h2>
+                    <p className="text-sm text-muted-foreground">Resize the window to see it in action!</p>
+                  </div>
+                </Glass>
+                <Glass
+                  className="w-64 h-64 flex items-center justify-center rounded-4xl mx-auto"
+                  color={glassColor}
+                  options={glassOptions}
+                >
+                  <div>
+                    <h2 className="text-2xl font-bold">Interactive Glass</h2>
+                    <p className="text-sm text-muted-foreground">Resize the window to see it in action!</p>
+                  </div>
+                </Glass>
+              </div>
             </section>
 
             {/* Filler Content */}
