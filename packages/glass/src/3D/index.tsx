@@ -1,9 +1,9 @@
-import { AdaptiveDpr, AdaptiveEvents, Preload, Stats, useDetectGPU } from "@react-three/drei"
+import { AdaptiveDpr, AdaptiveEvents, Preload, Stats } from "@react-three/drei"
 import { Canvas, invalidate } from "@react-three/fiber"
 import { motion, useMotionValueEvent, useTransform } from "motion/react"
 import { useCallback, useMemo } from "react"
 import { OrthographicCamera, type Texture } from "three"
-import { useFailCondition } from "../utils/hooks"
+// import { useFailCondition } from "../utils/hooks"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
 import { SceneLights } from "./lights"
 import { GlassMesh } from "./mesh"
@@ -18,10 +18,10 @@ const MotCanv = motion.create(Canvas)
 export function Glass3D(props: Glass3DProps) {
   // const [isSuspended, setIsSuspended] = useState(true)
   const { lighting, material, plane } = props.scene
-  const gpu = useDetectGPU({
-    failIfMajorPerformanceCaveat: true,
-  })
-  useFailCondition(() => gpu.tier < 2)
+  // const gpu = useDetectGPU({
+  //   failIfMajorPerformanceCaveat: true,
+  // })
+  // useFailCondition(() => gpu.tier < 2)
 
   // const texture = suspend(getTexture, [document.documentElement, 0])
   const texture = props.texture
