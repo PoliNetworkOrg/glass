@@ -59,6 +59,7 @@ function App() {
               className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl overflow-hidden"
               color={glassColor}
               options={glassOptions}
+              force3D
             >
               <h2 className="text-2xl font-bold">Real Glass</h2>
               <span className="text-sm text-muted-foreground">Rendered with WebGL</span>

@@ -14,6 +14,7 @@ export type GlassProps = {
   color: string
   /** Force reduce motion (disables 3D glass effect) */
   disable3D?: boolean
+  force3D?: boolean
 } & React.HTMLAttributes<HTMLDivElement>
 
 /**
@@ -29,7 +30,7 @@ export type GlassProps = {
  * it falls back to a simpler glass effect using pure CSS.
  */
 export function Glass(props: GlassProps) {
-  const { children, options, color, disable3D, ...rest } = props
+  const { children, options, color, disable3D, force3D, ...rest } = props
   const scene = SceneConfigSchema.parse(options)
   const { texture } = useGlass()
 
@@ -41,7 +42,7 @@ export function Glass(props: GlassProps) {
   const [ref, bounds] = useMotionBounds()
   const reducedMotion = useReducedMotion()
   const increasedContrast = useIncreasedContrast()
-  const do3D = texture && !disable3D && !reducedMotion && !increasedContrast
+  const do3D = texture && ((!disable3D && !reducedMotion && !increasedContrast) || force3D)
 
   const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius }
 
