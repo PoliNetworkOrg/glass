@@ -10,6 +10,16 @@ export type GlassPreset = {
 }
 
 /**
+ * Colors to give a `regular` or `clear` glass as its `color`, for a light and a dark interface: the neutral
+ * glass of Apple's, as measured on its tab bar (over a page of `#1c1c1e` the dark one comes out at the same
+ * gray as the bar does).
+ */
+export const glassColors = Object.freeze({
+  light: "#f8fafc",
+  dark: "#4d4d50",
+} as const)
+
+/**
  * Colors to give a `tinted` glass as its `color`: the system colors of Apple's interfaces, with `blue` the one to
  * start from.
  */

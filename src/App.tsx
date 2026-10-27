@@ -1,5 +1,6 @@
 import {
   Glass,
+  glassColors,
   type GlassPresetName,
   GlassProvider,
   glassTints,
@@ -51,7 +52,7 @@ function App() {
   const [tintColor, setTintColor] = useState<string>(glassTints.blue)
   const tinted = preset === "tinted"
 
-  const glassColor = tinted ? tintColor : isDarkMode ? "#3b6175" : "#F8FAFC"
+  const glassColor = tinted ? tintColor : isDarkMode ? glassColors.dark : glassColors.light
 
   return (
     <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur}>
