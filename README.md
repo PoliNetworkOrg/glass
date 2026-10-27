@@ -72,6 +72,7 @@ All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
 | `shape.bezel` | 1 – 64 | 16 | Width of the beveled edge in px. Fixed: it doesn't scale with the element. |
 | `shape.depth` | 0 – 64 | 16 | How far the bevel rises from the face. More bends the backdrop more. |
 | `shape.curve` | 0.5 – 6 | 2.5 | How the bevel slopes toward the rim. Higher keeps the face flat longer and bends more at the edge. |
+| `shape.dispersionRim` | 0 – 1 | 0 | Where the chromatic aberration (`material.chromaticAberration`) is: 0 spreads it evenly over the glass, 1 puts it all at the rim, where the surface is curved. |
 | `shape.lens` | -0.3 – 0.3 | 0 | Bends the face like a lens: positive magnifies what is behind the glass, negative shrinks it. |
 | `tint.opacity` | 0 – 1 | 0 | How much of `color` is laid over the glass. |
 | `tint.saturate` | 0.5 – 3 | 1 | Saturation of what is seen through the glass. |
@@ -96,6 +97,8 @@ A glass inside another glass dims its shadow, which lands on a lighter surface.
 ## Things to know
 
 - The shadow reaches outside of the glass, so a parent that clips overflow (`overflow: hidden`) cuts it off.
+- `shape.dispersionRim` changes the shader of drei's `MeshTransmissionMaterial`, so it depends on how that writes it. If a
+  version of drei writes it differently the glass keeps its even aberration.
 - `corner-shape` isn't supported everywhere yet, where it isn't the corners are round.
 - The 3D glass shows the page as it was captured, so what changes under it (a video, an animation) isn't reflected until
   the next capture.

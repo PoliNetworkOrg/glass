@@ -3,12 +3,13 @@ import { invalidate } from "@react-three/fiber"
 import { type MotionValue, useMotionValueEvent } from "motion/react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { RectReadOnly } from "react-use-measure"
-import { ExtrudeGeometry, type ExtrudeGeometryOptions } from "three"
+import { ExtrudeGeometry, type ExtrudeGeometryOptions, type Material } from "three"
 import type { GlassConfig, ShapeConfig } from "../types/schemas"
 import { applyBevelProfile } from "../utils/bevel"
 import { applyLens } from "../utils/lens"
 import { createRoundedRect } from "../utils/paths"
 import { reshapeGeometry } from "../utils/reshape"
+import { patchRimDispersion } from "../utils/rim-dispersion"
 
 /** The bevel can't be wider than half of the shortest side, or the inner shape would invert */
 const clampBevel = (bezel: number, w: number, h: number) => Math.min(bezel, Math.max(1, Math.min(w, h) / 2 - 1))
@@ -38,6 +39,12 @@ export function GlassMesh(props: GlassMeshProps) {
   // The size the geometry was built for. Resizing moves its vertices (see reshapeGeometry) instead
   // of building it again, and only if that can't hold, because the element got too small or the
   // bevel is clamped differently at the new size, is it rebuilt at the current size.
+  const rimDispersion = useMemo(() => ({ value: props.shape.dispersionRim }), [])
+  useEffect(() => {
+    rimDispersion.value = props.shape.dispersionRim
+    invalidate()
+  }, [rimDispersion, props.shape.dispersionRim])
+
   const [built, setBuilt] = useState(() => ({ w: props.bounds.get().width, h: props.bounds.get().height }))
 
   const { geometry, base, region } = useMemo(() => {
@@ -107,7 +114,12 @@ export function GlassMesh(props: GlassMeshProps) {
 
   return (
     <mesh geometry={geometry} frustumCulled={false}>
-      <MeshTransmissionMaterial {...options} />
+      <MeshTransmissionMaterial
+        ref={(material) => {
+          if (material) patchRimDispersion(material as unknown as Material, rimDispersion)
+        }}
+        {...options}
+      />
     </mesh>
   )
 }

@@ -75,12 +75,16 @@ export const ShapeSchema = z
     curve: z.number().min(0.5).max(6).default(2.5).meta({
       description: "How the bevel slopes toward the rim. Higher values keep it flat longer and bend more at the edge.",
     }),
+    dispersionRim: z.number().min(0).max(1).default(0).meta({
+      description:
+        "Where the chromatic aberration is. 0 spreads it evenly over the glass, 1 puts it all at the rim, where the surface is curved.",
+    }),
     lens: z.number().min(-0.3).max(0.3).default(0).meta({
       description:
         "Bends the face like a lens. Positive values magnify what is behind the glass, negative values shrink it. Past about 0.3 it breaks up.",
     }),
   })
-  .default({ bezel: 16, depth: 16, curve: 2.5, lens: 0 })
+  .default({ bezel: 16, depth: 16, curve: 2.5, lens: 0, dispersionRim: 0 })
 
 export const TintSchema = z
   .object({
