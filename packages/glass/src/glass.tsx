@@ -1,9 +1,9 @@
 import { useReducedMotion } from "motion/react"
-import { Suspense } from "react"
+import { Suspense, useContext } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
-import { useGlass } from "./context"
-import { GlassEdge, type GlassTheme } from "./edge"
+import { GlassNestContext, useGlass } from "./context"
+import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useComputedStyle, useIncreasedContrast, useMotionBounds } from "./utils/hooks"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
@@ -38,6 +38,7 @@ export function Glass(props: GlassProps) {
   const { children, options, color, disable3D, force3D, theme, ...rest } = props
   const scene = SceneConfigSchema.parse(options)
   const { texture } = useGlass()
+  const nested = useContext(GlassNestContext)
 
   const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
     (style) => ({
@@ -53,6 +54,8 @@ export function Glass(props: GlassProps) {
   const increasedContrast = useIncreasedContrast()
   const do3D = texture && ((!disable3D && !reducedMotion && !increasedContrast) || force3D)
 
+  const resolvedTheme = theme ?? themeFromColor(color)
+
   const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius, cornerExponent }
 
   return (
@@ -66,6 +69,16 @@ export function Glass(props: GlassProps) {
         ...rest.style,
       }}
     >
+      <GlassShadow
+        borderRadius={borderRadius}
+        cornerShape={corners?.shape || undefined}
+        theme={resolvedTheme}
+        elevation={scene.edge.elevation}
+        strength={scene.edge.shadow}
+        presence={scene.edge.presence}
+        nested={nested}
+        tint={scene.tint.opacity > 0 ? color : undefined}
+      />
       <div
         ref={ref}
         className="_polinetwork_glass-content"
@@ -110,12 +123,12 @@ export function Glass(props: GlassProps) {
         <GlassEdge
           borderRadius={borderRadius}
           cornerShape={corners?.shape || undefined}
-          theme={theme ?? themeFromColor(color)}
+          theme={resolvedTheme}
           rim={scene.edge.rim}
           stroke={scene.edge.stroke}
         />
       </div>
-      {children}
+      <GlassNestContext.Provider value={true}>{children}</GlassNestContext.Provider>
     </div>
   )
 }

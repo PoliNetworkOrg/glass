@@ -28,7 +28,7 @@ const regular: GlassPreset = {
   },
   plane: { blur: 2 },
   tint: { opacity: 0, saturate: 1 },
-  edge: { rim: 1, stroke: 1 },
+  edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
 }
 
 /**
@@ -56,13 +56,13 @@ export const glassPresets: Readonly<Record<GlassPresetName, Readonly<GlassPreset
     },
     plane: { blur: 1 },
     tint: { opacity: 0.05, saturate: 1.8 },
-    edge: { rim: 0.6, stroke: 0.75 },
+    edge: { rim: 0.6, stroke: 0.75, elevation: "default", shadow: 0.55, presence: 0 },
   },
   tinted: {
     material: { ...regular.material },
     plane: { blur: 2 },
     tint: { opacity: 0.35, saturate: 1.4 },
-    edge: { rim: 1, stroke: 1 },
+    edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 1 },
   },
 })
 

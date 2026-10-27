@@ -106,8 +106,24 @@ export const EdgeSchema = z
       .max(1)
       .default(1)
       .meta({ description: "Strength of the hairline stroke around the glass. 0 is none." }),
+    elevation: z
+      .enum(["low", "default", "high", "extra-high"])
+      .default("default")
+      .meta({ description: "How high the glass floats, which shapes the shadow it casts." }),
+    shadow: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(1)
+      .meta({ description: "Strength of the shadow the glass casts. 0 is none." }),
+    presence: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0)
+      .meta({ description: "A faint, tight shadow kept at every elevation, for glass that would read flat." }),
   })
-  .default({ rim: 1, stroke: 1 })
+  .default({ rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 })
 
 export const LightingSchema = z
   .object({

@@ -12,3 +12,6 @@ export const GlassContext = createContext<GlassContextType>({
 export function useGlass() {
   return useContext(GlassContext)
 }
+
+/** Whether the glass is inside another glass */
+export const GlassNestContext = createContext(false)
