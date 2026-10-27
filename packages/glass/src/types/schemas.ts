@@ -58,6 +58,23 @@ export const PlaneSchema = z.object({
   blur: z.number().min(0).max(100).default(2).meta({ description: "Blur amount for the background plane." }),
 })
 
+export const ShapeSchema = z
+  .object({
+    bezel: z
+      .number()
+      .min(1)
+      .max(64)
+      .default(16)
+      .meta({ description: "Width of the beveled edge, in px. Fixed, it does not scale with the element." }),
+    depth: z
+      .number()
+      .min(0)
+      .max(64)
+      .default(16)
+      .meta({ description: "How far the bevel rises from the face, in px. Higher values bend the backdrop more." }),
+  })
+  .default({ bezel: 16, depth: 16 })
+
 export const LightingSchema = z
   .object({
     ambient: z.object({
@@ -103,6 +120,7 @@ export const LightingSchema = z
 export const SceneConfigSchema = z.object({
   material: z.any().default({}),
   plane: PlaneSchema,
+  shape: ShapeSchema,
   lighting: LightingSchema,
 })
 
@@ -110,4 +128,5 @@ export type GlassConfig = MeshTransmissionMaterialProps
 export type SceneConfig = z.infer<typeof SceneConfigSchema> & {
   material: GlassConfig
 }
+export type ShapeConfig = z.infer<typeof ShapeSchema>
 export type PlaneConfig = z.infer<typeof PlaneSchema>

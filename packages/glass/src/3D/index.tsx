@@ -17,7 +17,7 @@ const MotCanv = motion.create(Canvas)
 
 export function Glass3D(props: Glass3DProps) {
   // const [isSuspended, setIsSuspended] = useState(true)
-  const { lighting, material, plane } = props.scene
+  const { lighting, material, plane, shape } = props.scene
   // const gpu = useDetectGPU({
   //   failIfMajorPerformanceCaveat: true,
   // })
@@ -73,7 +73,14 @@ export function Glass3D(props: Glass3DProps) {
       <AdaptiveDpr />
       <AdaptiveEvents />
       <SceneLights settings={lighting} />
-      <GlassMesh color={props.color} width={width} height={height} borderRadius={props.borderRadius} options={material} />
+      <GlassMesh
+        color={props.color}
+        width={width}
+        height={height}
+        borderRadius={props.borderRadius}
+        shape={shape}
+        options={material}
+      />
       <BGPlane texture={texture} bounds={props.bounds} options={plane} />
       <Preload all />
     </MotCanv>
