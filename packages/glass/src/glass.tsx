@@ -5,6 +5,7 @@ import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { useGlass } from "./context"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useComputedStyle, useIncreasedContrast, useMotionBounds } from "./utils/hooks"
+import { parseBorderRadius } from "./utils/style"
 
 export type GlassProps = {
   children: React.ReactNode
@@ -34,10 +35,7 @@ export function Glass(props: GlassProps) {
   const scene = SceneConfigSchema.parse(options)
   const { texture } = useGlass()
 
-  const [outer, br] = useComputedStyle<HTMLDivElement, number>((style) => {
-    const match = style.borderRadius.match(/(\d+)px/)
-    return match ? parseInt(match[1], 10) : 0
-  })
+  const [outer, br] = useComputedStyle<HTMLDivElement, number>(parseBorderRadius)
   const borderRadius = br || 0
   const [ref, bounds] = useMotionBounds()
   const reducedMotion = useReducedMotion()
