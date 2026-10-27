@@ -73,7 +73,7 @@ export function FieldRenderer<T extends z.ZodType>({ schema: sk, value, path, on
         </Label>
         <Slider
           id={path.join(".")}
-          value={[value ? Number(value) : min]}
+          value={[typeof value === "number" ? value : min]}
           onValueChange={([v]) => cb(v)}
           min={min}
           max={max}
