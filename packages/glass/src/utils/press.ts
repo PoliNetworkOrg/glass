@@ -25,6 +25,8 @@ const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)"
 const PRESS_IN = "0.11s cubic-bezier(0.3, 0, 0.4, 1)"
 const SETTLE_S = 0.5
 const LIT = "brightness(1.11) saturate(1.35)"
+/** The custom property that holds the filter of the lit state while the element is pressed, and is unset otherwise */
+export const LIT_VAR = "--glass-lit"
 /** What can sit inside a glass (a link in a popover) and is its own: a press that starts on it isn't the glass's */
 const INNER_CONTROL = 'a, button, input, select, textarea, [role="button"]'
 
@@ -67,13 +69,11 @@ function scrollers(el: HTMLElement) {
  * Makes a glass element a control: it lifts on hover, snaps down and lights up when pressed, and stretches when
  * dragged.
  *
- * @param el The element of the glass. Its `._polinetwork_glass-content` child is the layer that is lit.
+ * @param el The element of the glass
  * @param options
  * @returns A function that detaches it and puts the element back
  */
 export function attachGlassPress(el: HTMLElement, options: GlassPressOptions = {}): () => void {
-  const layer = () => el.querySelector<HTMLElement>(":scope > ._polinetwork_glass-content")
-
   const own = {
     touchAction: el.style.touchAction,
     userSelect: el.style.userSelect,
@@ -104,11 +104,12 @@ export function attachGlassPress(el: HTMLElement, options: GlassPressOptions = {
     el.style.translate = ""
     el.style.scale = hovered && !prefersReducedMotion() ? String(HOVER_SCALE) : ""
   }
+  // The light is a variable on the element, for whatever draws the glass to put where it works: a filter on the layer
+  // of the 3D glass, but on the leaves of the CSS glass, where a filter on the layer would cut the backdrop filter
+  // below it off from the page. See `lit` in the fallback and the edge.
   const light = (on: boolean) => {
-    const l = layer()
-    if (!l) return
-    l.style.transition = "filter 0.2s ease"
-    l.style.filter = on ? LIT : ""
+    if (on) el.style.setProperty(LIT_VAR, LIT)
+    else el.style.removeProperty(LIT_VAR)
   }
   // raised above its neighbours for the whole gesture and the spring back, so it never slips behind what it overlaps
   const raise = () => {

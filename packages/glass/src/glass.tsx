@@ -8,7 +8,7 @@ import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useGlassCapability } from "./utils/capability"
 import { useFade, useOverscroll } from "./utils/overscroll"
 import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
-import { attachGlassPress } from "./utils/press"
+import { attachGlassPress, LIT_VAR } from "./utils/press"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
 import { isColored, themeFromColor } from "./utils/theme"
 
@@ -100,7 +100,10 @@ export function Glass(props: GlassProps) {
   // a colored glass has edges of its color, a neutral one the white and black of its theme
   const edgeTint = scene.tint.opacity > 0 && isColored(color) ? color : undefined
 
-  const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius, cornerExponent }
+  // The 3D glass is lit by a filter on its layer, the CSS glass (which is also what stands in for it while the page
+  // bounces) on its own parts, since a filter on the layer would cut its backdrop filter off from the page
+  const layerLit = Boolean(do3D) && !fade.mounted
+  const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius, cornerExponent, lit: !layerLit }
 
   return (
     <div
@@ -142,6 +145,7 @@ export function Glass(props: GlassProps) {
           overflow: "hidden",
 
           zIndex: -1,
+          ...(layerLit ? { filter: `var(${LIT_VAR}, none)`, transition: "filter 0.2s ease" } : {}),
         }}
       >
         {do3D ? (
@@ -188,6 +192,7 @@ export function Glass(props: GlassProps) {
           rim={scene.edge.rim}
           stroke={scene.edge.stroke}
           tint={edgeTint}
+          lit={!layerLit}
         />
       </div>
       <GlassNestContext.Provider value={true}>{children}</GlassNestContext.Provider>

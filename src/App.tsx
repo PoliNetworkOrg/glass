@@ -84,6 +84,7 @@ function App() {
               color={glassColor}
               options={glassOptions}
               disable3D
+              interactive
             >
               <h2 className="text-2xl font-bold">Fallback Glass</h2>
               <span className={`text-sm ${tinted ? "text-white/80" : "text-muted-foreground"}`}>Pure CSS</span>

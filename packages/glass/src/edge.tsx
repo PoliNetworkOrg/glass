@@ -1,4 +1,5 @@
 import { type CSSProperties, useSyncExternalStore } from "react"
+import { LIT_VAR } from "./utils/press"
 
 export type GlassTheme = "light" | "dark"
 
@@ -14,6 +15,11 @@ export type GlassEdgeProps = {
   stroke: number
   /** The color of a tinted glass: its edges are light and shade of it instead of white and black */
   tint?: string
+  /**
+   * Wear the light of a pressed glass on its own. The 3D glass is lit by a filter on its whole layer, which the CSS
+   * glass can't have: a filter on a parent cuts the backdrop filter of what is inside off from the page.
+   */
+  lit?: boolean
 }
 
 // The values are the ones of Vitrium, measured against iOS: the sides of the glass are shaded, and the
@@ -124,7 +130,7 @@ function rimShadow(theme: GlassTheme, strength: number, hdr: boolean, tint?: str
  * to the shape of the glass.
  */
 export function GlassEdge(props: GlassEdgeProps) {
-  const { borderRadius, cornerShape, theme, rim, stroke, tint } = props
+  const { borderRadius, cornerShape, theme, rim, stroke, tint, lit } = props
   const t = THEMES[theme]
   const hdr = useSyncExternalStore(subscribeHdr, supportsHdr, () => false)
   // the stops of the stroke, from the top to the bottom edge: lit at the ends, shaded between
@@ -138,6 +144,7 @@ export function GlassEdge(props: GlassEdgeProps) {
     borderRadius,
     pointerEvents: "none",
     ...(cornerShape ? ({ cornerShape } as CSSProperties) : {}),
+    ...(lit ? { filter: `var(${LIT_VAR}, none)`, transition: "filter 0.2s ease" } : {}),
   }
 
   return (
