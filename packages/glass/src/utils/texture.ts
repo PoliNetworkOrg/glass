@@ -15,6 +15,7 @@ export async function getTexture(element: HTMLElement, blur: number = 0): Promis
     height: element.scrollHeight,
     quality: 0.95,
     pixelRatio: 1,
+    includeQueryParams: true,
     style: blur ? { filter: `blur(${blur}px)` } : undefined,
   })
   // console.timeEnd(`getTexture-${rand}`)
