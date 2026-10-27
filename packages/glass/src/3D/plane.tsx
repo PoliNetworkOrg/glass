@@ -1,4 +1,3 @@
-import { Plane } from "@react-three/drei"
 import { invalidate } from "@react-three/fiber"
 import { type MotionValue, useAnimationFrame, useMotionValueEvent, useScroll } from "motion/react"
 import { useCallback, useRef } from "react"
@@ -61,8 +60,9 @@ export function BGPlane(props: PlaneMeshProps) {
   useMotionValueEvent(props.bounds, "change", updatePosition)
 
   return (
-    <Plane ref={plane} name="glass-bg" position={[...getCoords(), -1000]} args={[texture.width, texture.height]}>
+    <mesh ref={plane} name="glass-bg" position={[...getCoords(), -1000]}>
+      <planeGeometry args={[texture.width, texture.height]} />
       <meshBasicMaterial map={texture} />
-    </Plane>
+    </mesh>
   )
 }

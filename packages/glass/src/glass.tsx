@@ -13,9 +13,9 @@ import { themeFromColor } from "./utils/theme"
 
 export type GlassProps = {
   children: React.ReactNode
-  /** Glass material options */
+  /** The configuration of the glass, or a preset */
   options: Partial<SceneConfig>
-  /** Color of the glass material */
+  /** Color of the glass */
   color: string
   /** Force reduce motion (disables 3D glass effect) */
   disable3D?: boolean

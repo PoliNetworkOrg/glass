@@ -1,12 +1,9 @@
-import { AdaptiveDpr, AdaptiveEvents, Preload } from "@react-three/drei"
 import { advance, Canvas, useThree } from "@react-three/fiber"
 import { motion, useMotionValueEvent } from "motion/react"
 import { useMemo, useRef } from "react"
 import { OrthographicCamera, type Texture } from "three"
 import { GlassDisplacement } from "./displacement"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
-import { SceneLights } from "./lights"
-import { GlassMesh } from "./mesh"
 import { BGPlane } from "./plane"
 
 export type Glass3DProps = GlassFallbackProps & {
@@ -19,8 +16,8 @@ const MotCanv = motion.create(Canvas)
  * Keeps the size of the canvas in step with the element as it changes.
  *
  * The canvas follows the element on its own, but only after it has measured it, a few
- * frames later, and until then it shows a cropped view of a mesh that is already resized.
- * This sets the size in the same event that moves the mesh and renders that frame right away,
+ * frames later, and until then it shows a cropped view of a glass that is already resized.
+ * This sets the size in the same event that resizes the glass and renders that frame right away,
  * since resizing a canvas clears it.
  *
  * It has to come after everything else that listens to the bounds, so they are up to date.
@@ -46,7 +43,7 @@ function SyncSize({ bounds }: { bounds: Glass3DProps["bounds"] }) {
 
 export function Glass3D(props: Glass3DProps) {
   // const [isSuspended, setIsSuspended] = useState(true)
-  const { lighting, material, plane, shape, tint } = props.scene
+  const { plane, shape, surface, tint } = props.scene
   // const texture = suspend(getTexture, [document.documentElement, 0])
   const texture = props.texture
 
@@ -77,32 +74,16 @@ export function Glass3D(props: Glass3DProps) {
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
-      <AdaptiveDpr />
-      <AdaptiveEvents />
-      {shape.profile === "apple" ? (
-        <GlassDisplacement
-          bounds={props.bounds}
-          borderRadius={props.borderRadius}
-          cornerExponent={props.cornerExponent ?? 2}
-          shape={shape}
-          texture={texture}
-        />
-      ) : (
-        <>
-          <SceneLights settings={lighting} />
-          <GlassMesh
-            color={props.color}
-            bounds={props.bounds}
-            borderRadius={props.borderRadius}
-            cornerExponent={props.cornerExponent ?? 2}
-            shape={shape}
-            options={material}
-          />
-        </>
-      )}
+      <GlassDisplacement
+        bounds={props.bounds}
+        borderRadius={props.borderRadius}
+        cornerExponent={props.cornerExponent ?? 2}
+        shape={shape}
+        frost={surface.frost}
+        texture={texture}
+      />
       <BGPlane texture={texture} bounds={props.bounds} options={plane} />
       <SyncSize bounds={props.bounds} />
-      <Preload all />
     </MotCanv>
   )
 }

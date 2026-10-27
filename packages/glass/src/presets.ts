@@ -1,79 +1,50 @@
-import type { EdgeConfig, GlassConfig, PlaneConfig, SceneConfig, ShapeConfig, TintConfig } from "./types/schemas"
+import type { EdgeConfig, PlaneConfig, SceneConfig, ShapeConfig, SurfaceConfig, TintConfig } from "./types/schemas"
 
 /** A named configuration of the glass, to be used as (or merged into) the `options` of a glass */
 export type GlassPreset = {
-  material?: Partial<GlassConfig>
   plane?: Partial<PlaneConfig>
   shape?: Partial<ShapeConfig>
+  surface?: Partial<SurfaceConfig>
   tint?: Partial<TintConfig>
   edge?: Partial<EdgeConfig>
 }
 
-export type GlassPresetName = "regular" | "clear" | "tinted" | "apple"
-
-const regular: GlassPreset = {
-  material: {
-    ior: 8,
-    thickness: 100,
-    transmission: 0.95,
-    roughness: 0.1,
-    chromaticAberration: 0.6,
-    anisotropicBlur: 0.8,
-    clearcoat: 1,
-    clearcoatRoughness: 0.8,
-    sheen: 0.5,
-    iridescence: 0.5,
-    attenuationColor: "#fefefe",
-    attenuationDistance: 100,
-  },
-  plane: { blur: 2 },
-  shape: { profile: "mesh" },
-  tint: { opacity: 0, saturate: 1 },
-  edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
-}
+export type GlassPresetName = "regular" | "clear" | "tinted"
 
 /**
  * Ready made configurations of the glass.
  *
- * - `regular` the glass as it comes
- * - `clear` less frost and tint, to get out of the way of what is behind it
+ * - `regular` frosted glass, the one that comes by default
+ * - `clear` almost no frost or tint, to get out of the way of what is behind it
  * - `tinted` colored glass, whose color is the one given to the glass
- * - `apple` the displacement profile fitted to Apple's Liquid Glass, drawn flat
  *
  * They are plain options: use one as is, or through {@link withPreset} to change some of it.
  *
- * The blur of the background is the one of the {@link GlassProvider}, shared by all the glass
- * in it, so `plane.blur` takes effect where the provider is given it.
+ * `plane.blur` is the blur of the whole captured background, shared by all the glass in a
+ * {@link GlassProvider}, so it takes effect where the provider is given it. The frost of each
+ * glass is `surface.frost`.
  */
 export const glassPresets: Readonly<Record<GlassPresetName, Readonly<GlassPreset>>> = Object.freeze({
-  regular,
+  regular: {
+    plane: { blur: 2 },
+    shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
+    surface: { frost: 4 },
+    tint: { opacity: 0, saturate: 1 },
+    edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
+  },
   clear: {
-    material: {
-      ...regular.material,
-      roughness: 0.02,
-      thickness: 60,
-      clearcoat: 0.5,
-      sheen: 0.2,
-      chromaticAberration: 0.3,
-    },
     plane: { blur: 1 },
-    shape: { profile: "mesh" },
-    tint: { opacity: 0.05, saturate: 1.8 },
+    shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0.1 },
+    surface: { frost: 0 },
+    tint: { opacity: 0.05, saturate: 1.2 },
     edge: { rim: 0.6, stroke: 0.75, elevation: "default", shadow: 0.55, presence: 0 },
   },
   tinted: {
-    material: { ...regular.material },
     plane: { blur: 2 },
-    shape: { profile: "mesh" },
+    shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
+    surface: { frost: 4 },
     tint: { opacity: 0.35, saturate: 1.4 },
     edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 1 },
-  },
-  apple: {
-    material: { ...regular.material },
-    plane: { blur: 2 },
-    shape: { profile: "apple", bezel: 16, shift: 25, curve: 2.5, dispersion: 0 },
-    tint: { opacity: 0, saturate: 1 },
-    edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
   },
 })
 
@@ -91,7 +62,7 @@ function merge<T>(base: T, override: unknown): T {
  * A preset, with some of its options changed.
  *
  * @example
- * <Glass options={withPreset("clear", { material: { roughness: 0.2 } })} ... />
+ * <Glass options={withPreset("clear", { surface: { frost: 8 } })} ... />
  *
  * @param name The preset to start from
  * @param overrides What to change, merged in depth

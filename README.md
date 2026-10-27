@@ -1,8 +1,8 @@
 # glass
 apple could never
 
-Liquid glass for the web: the page behind an element is captured as a texture and refracted through a real 3D glass
-(Three.js, with a transmission material), with a CSS version where that can't be used.
+Liquid glass for the web: the page behind an element is captured as a texture and bent at the edges of the glass by a
+displacement profile fitted to Apple's Liquid Glass (WebGL, with Three.js), with a CSS version where that can't be used.
 
 ```tsx
 import { Glass, GlassProvider, glassPresets } from "@polinetwork/glass"
@@ -59,10 +59,9 @@ available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the d
 
 | | |
 | --- | --- |
-| `regular` | The glass as it comes. |
-| `clear` | Less frost and tint, to get out of the way of what is behind it. |
+| `regular` | Frosted glass, the default. |
+| `clear` | No frost and little tint, with a touch of color split at the rim, to get out of the way of what is behind it. |
 | `tinted` | Colored glass: its color is the `color` of the glass. |
-| `apple` | The `apple` refraction profile (see [Refraction profiles](#refraction-profiles)), drawn flat. |
 
 ## Configuration
 
@@ -70,17 +69,13 @@ All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
 
 | Field | Range | Default | |
 | --- | --- | --- | --- |
-| `material` | | | Props of drei's [`MeshTransmissionMaterial`](https://github.com/pmndrs/drei#meshtransmissionmaterial). |
-| `plane.blur` | 0 – 100 | 2 | Blur of the background (see `GlassProvider`). |
-| `shape.profile` | `mesh` `apple` | `mesh` | How the glass bends what is behind it, see [Refraction profiles](#refraction-profiles). |
-| `shape.bezel` | 1 – 64 | 16 | Width of the bent band at the edge in px. Fixed for `mesh`; `apple` grows it with the element (`shape.scaling`). |
-| `shape.depth` | 0 – 64 | 16 | `mesh`: how far the bevel rises from the face. More bends the backdrop more. |
-| `shape.curve` | 0.5 – 6 | 2.5 | How the bend grows toward the rim. Higher keeps the face flat longer and bends more at the edge. Both profiles. |
-| `shape.shift` | 0 – 64 | 25 | `apple`: how far in from the rim the very edge samples, in px. |
-| `shape.scaling` | 0 – 1 | 0.4 | `apple`: how much `bezel` and `shift` grow on elements whose shortest side is over 64px (the size the profile was fitted on): they are multiplied by `(side / 64) ** scaling`. 0 keeps them as set. |
-| `shape.dispersion` | 0 – 1 | 0 | `apple`: how much further the red bends than the blue, which splits the colors at the rim. |
-| `shape.dispersionRim` | 0 – 1 | 0 | `mesh`: where the chromatic aberration (`material.chromaticAberration`) is: 0 spreads it evenly over the glass, 1 puts it all at the rim, where the surface is curved. |
-| `shape.lens` | -0.3 – 0.3 | 0 | `mesh`: bends the face like a lens: positive magnifies what is behind the glass, negative shrinks it. |
+| `plane.blur` | 0 – 100 | 2 | Blur of the captured background (see `GlassProvider`). |
+| `shape.bezel` | 1 – 64 | 16 | Width of the bent band at the edge, in px. |
+| `shape.shift` | 0 – 64 | 25 | How far in from the rim the very edge samples, in px. |
+| `shape.curve` | 0.5 – 6 | 2.5 | How the bend grows toward the rim. Higher keeps the face flat longer and bends more at the edge. |
+| `shape.scaling` | 0 – 1 | 0.4 | How much `bezel` and `shift` grow on elements whose shortest side is over 64px (the size the profile was fitted on): they are multiplied by `(side / 64) ** scaling`. 0 keeps them as set. |
+| `shape.dispersion` | 0 – 1 | 0 | How much further the red bends than the blue, which splits the colors at the rim. |
+| `surface.frost` | 0 – 32 | 4 | How much the glass blurs what is behind it, in px. Per glass, on top of `plane.blur`. |
 | `tint.opacity` | 0 – 1 | 0 | How much of `color` is laid over the glass. |
 | `tint.saturate` | 0.5 – 3 | 1 | Saturation of what is seen through the glass. |
 | `edge.rim` | 0 – 1 | 1 | Strength of the highlight on the edges. |
@@ -88,28 +83,20 @@ All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
 | `edge.elevation` | `low` `default` `high` `extra-high` | `default` | How high the glass floats, which shapes the shadow it casts. |
 | `edge.shadow` | 0 – 1 | 1 | Strength of that shadow. |
 | `edge.presence` | 0 – 1 | 0 | A faint, tight shadow kept at every elevation, for glass that would read flat. |
-| `lighting` | | | The ambient and directional lights of the scene. |
 
 A glass inside another glass dims its shadow, which lands on a lighter surface.
 
-### Refraction profiles
+### Refraction
 
-`shape.profile` picks how the glass bends the page behind it.
+The background is sampled through a displacement profile fitted to recordings of Apple's Liquid Glass (the one of
+[Vitrium](https://github.com/SummaCristian/Vitrium)): inside a `bezel` wide band at the rim each point shows what is up
+to `shift` px further in, growing as `t ** curve` toward the rim, and the middle is flat. Where the shift outruns the
+curve the outer part of the band folds over and shows what is deeper in, as the curved edge of a real slab of glass
+does. Measured on a gradient background it goes 21, 15, 10, 6, 3, 1 px at 1, 3, 5, 7, 9, 11 px from the rim.
 
-- **`mesh`** (default): the glass is a bevelled 3D mesh, and drei's transmission shader refracts the background through
-  it. It has lights, sheen, clearcoat and roughness (the `material` and `lighting` fields), and the bend depends on
-  `ior`, `thickness` and the bevel.
-- **`apple`**: the background is sampled through a displacement profile fitted to recordings of Apple's Liquid Glass
-  (the one of [Vitrium](https://github.com/SummaCristian/Vitrium)): inside a `bezel` wide band at the rim each point shows what is up to
-  `shift` px further in, growing as `t ** curve` toward the rim, and the middle is flat. Where the shift outruns the
-  curve the outer part of the band folds over and shows what is deeper in, as the curved edge of a real slab of glass
-  does. It is drawn flat: there is no shading (the rim, stroke and shadow of `edge` stand in for it), so `material`,
-  `lighting`, `depth`, `lens` and `dispersionRim` have no effect.
-
-They are different recipes, not the same one tuned: measured on a gradient background, the displacement of `apple` goes
-21, 15, 10, 6, 3, 1 px at 1, 3, 5, 7, 9, 11 px from the rim (the formula), while `mesh` with the demo's values goes 90,
-82, 71, 48, 29, 10, and no `ior`, `thickness` or `curve` makes it follow the other: the transmission shader saturates at
-the steep angles of the rim, so it has a plateau at the edge and a shorter tail.
+The glass is drawn flat: there is no shading, and the rim, stroke and shadow of `edge` stand in for it. It is not
+a 3D mesh with a transmission material, which was tried first and abandoned: its shader saturates at the steep angles
+of the rim and no `ior` or `thickness` made it follow this profile.
 
 ## Performance
 
@@ -123,8 +110,6 @@ the steep angles of the rim, so it has a plateau at the edge and a shorter tail.
 ## Things to know
 
 - The shadow reaches outside of the glass, so a parent that clips overflow (`overflow: hidden`) cuts it off.
-- `shape.dispersionRim` (mesh) changes the shader of drei's `MeshTransmissionMaterial`, so it depends on how that writes it. If a
-  version of drei writes it differently the glass keeps its even aberration.
 - `corner-shape` isn't supported everywhere yet, where it isn't the corners are round.
 - The 3D glass shows the page as it was captured, so what changes under it (a video, an animation) isn't reflected until
   the next capture.

@@ -73,7 +73,7 @@ function App() {
             >
               <h2 className="text-2xl font-bold">Fallback Glass</h2>
               <span className="text-sm text-muted-foreground">Pure CSS</span>
-              <code className="text-xs mt-2">blur: {(glassOptions.material.roughness * 12).toFixed(1)}px</code>
+              <code className="text-xs mt-2">frost: {glassOptions.surface.frost}px</code>
             </Glass>
           </div>
 

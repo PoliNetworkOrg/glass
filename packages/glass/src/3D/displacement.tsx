@@ -12,6 +12,8 @@ export type GlassDisplacementProps = {
   /** Superellipse exponent of the corners, 2 is round and 4 a squircle */
   cornerExponent: number
   shape: ShapeConfig
+  /** How much the backdrop is blurred, in px */
+  frost: number
   /** The captured page, which is what gets bent */
   texture: Texture
 }
@@ -44,6 +46,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uShift;
   uniform float uCurve;
   uniform float uDispersion;
+  uniform float uFrost;
   varying vec2 vPos;
 
   // x: how far in from the nearest edge (negative outside), yz: that edge's outward normal
@@ -71,16 +74,30 @@ const FRAGMENT = /* glsl */ `
     return texture2D(uMap, uv).rgb;
   }
 
+  // the backdrop blurred over a disc of radius uFrost px: the center, an inner ring and an outer ring
+  vec3 frosted(vec2 p) {
+    vec3 c = sampleAt(p);
+    if (uFrost <= 0.0) return c;
+    for (int i = 0; i < 8; i++) {
+      float a = float(i) * 0.785398;
+      vec2 d = vec2(cos(a), sin(a));
+      c += sampleAt(p + d * uFrost * 0.5) + sampleAt(p + d * uFrost);
+    }
+    return c / 17.0;
+  }
+
   void main() {
     vec3 e = edge(vPos, uSize * 0.5, uRadius, uExp);
     float mag = 0.0;
     if (e.x >= 0.0 && e.x < uBezel) mag = pow(1.0 - e.x / uBezel, uCurve);
 
     // red bends further and blue less, per unit of dispersion
-    vec3 color;
-    color.r = sampleAt(vPos - e.yz * uShift * mag * (1.0 + uDispersion)).r;
-    color.g = sampleAt(vPos - e.yz * uShift * mag).g;
-    color.b = sampleAt(vPos - e.yz * uShift * mag * (1.0 - uDispersion)).b;
+    vec2 bend = e.yz * uShift * mag;
+    vec3 color = frosted(vPos - bend);
+    if (uDispersion > 0.0) {
+      color.r = frosted(vPos - bend * (1.0 + uDispersion)).r;
+      color.b = frosted(vPos - bend * (1.0 - uDispersion)).b;
+    }
 
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
@@ -99,7 +116,7 @@ const FRAGMENT = /* glsl */ `
  * of the glass (rim, stroke, shadow) stands in for.
  */
 export function GlassDisplacement(props: GlassDisplacementProps) {
-  const { bounds, borderRadius, cornerExponent, shape, texture } = props
+  const { bounds, borderRadius, cornerExponent, shape, frost, texture } = props
   const mesh = useRef<Mesh>(null)
 
   const material = useMemo(
@@ -118,6 +135,7 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
           uShift: { value: 25 },
           uCurve: { value: 2.5 },
           uDispersion: { value: 0 },
+          uFrost: { value: 0 },
         },
       }),
     []
@@ -142,11 +160,12 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
     u.uShift.value = Math.max(0, Math.min(shape.shift * grow, half))
     u.uCurve.value = shape.curve
     u.uDispersion.value = shape.dispersion
+    u.uFrost.value = frost
     mesh.current?.scale.set(w, h, 1)
     invalidate()
   }
 
-  useLayoutEffect(sync, [bounds, borderRadius, cornerExponent, shape, texture, material])
+  useLayoutEffect(sync, [bounds, borderRadius, cornerExponent, shape, frost, texture, material])
   useMotionValueEvent(bounds, "change", sync)
   useLayoutEffect(() => () => material.dispose(), [material])
 
