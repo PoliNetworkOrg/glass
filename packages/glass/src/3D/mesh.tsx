@@ -6,6 +6,7 @@ import type { RectReadOnly } from "react-use-measure"
 import { ExtrudeGeometry, type ExtrudeGeometryOptions } from "three"
 import type { GlassConfig, ShapeConfig } from "../types/schemas"
 import { applyBevelProfile } from "../utils/bevel"
+import { applyLens } from "../utils/lens"
 import { createRoundedRect } from "../utils/paths"
 import { reshapeGeometry } from "../utils/reshape"
 
@@ -63,6 +64,15 @@ export function GlassMesh(props: GlassMeshProps) {
       props.shape.depth,
       props.shape.curve
     )
+    // the outline of the face is the shape the bevel grows from
+    applyLens(
+      geometry,
+      props.shape.depth,
+      Math.max(1, built.w - bevelSize * 2) / 2,
+      Math.max(1, built.h - bevelSize * 2) / 2,
+      Math.max(0, props.borderRadius - bevelSize),
+      props.shape.lens
+    )
     return {
       geometry,
       base: Float32Array.from(geometry.getAttribute("position").array),
@@ -74,6 +84,7 @@ export function GlassMesh(props: GlassMeshProps) {
     props.shape.bezel,
     props.shape.depth,
     props.shape.curve,
+    props.shape.lens,
     built.w,
     built.h,
   ])

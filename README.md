@@ -72,6 +72,7 @@ All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
 | `shape.bezel` | 1 – 64 | 16 | Width of the beveled edge in px. Fixed: it doesn't scale with the element. |
 | `shape.depth` | 0 – 64 | 16 | How far the bevel rises from the face. More bends the backdrop more. |
 | `shape.curve` | 0.5 – 6 | 2.5 | How the bevel slopes toward the rim. Higher keeps the face flat longer and bends more at the edge. |
+| `shape.lens` | -0.3 – 0.3 | 0 | Bends the face like a lens: positive magnifies what is behind the glass, negative shrinks it. |
 | `tint.opacity` | 0 – 1 | 0 | How much of `color` is laid over the glass. |
 | `tint.saturate` | 0.5 – 3 | 1 | Saturation of what is seen through the glass. |
 | `edge.rim` | 0 – 1 | 1 | Strength of the highlight on the edges. |
