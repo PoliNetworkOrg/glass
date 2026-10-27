@@ -61,7 +61,7 @@ export function BGPlane(props: PlaneMeshProps) {
   useMotionValueEvent(props.bounds, "change", updatePosition)
 
   return (
-    <Plane ref={plane} position={[...getCoords(), -1000]} args={[texture.width, texture.height]}>
+    <Plane ref={plane} name="glass-bg" position={[...getCoords(), -1000]} args={[texture.width, texture.height]}>
       <meshBasicMaterial map={texture} />
     </Plane>
   )

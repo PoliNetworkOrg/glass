@@ -9,7 +9,7 @@ export type GlassPreset = {
   edge?: Partial<EdgeConfig>
 }
 
-export type GlassPresetName = "regular" | "clear" | "tinted"
+export type GlassPresetName = "regular" | "clear" | "tinted" | "apple"
 
 const regular: GlassPreset = {
   material: {
@@ -27,6 +27,7 @@ const regular: GlassPreset = {
     attenuationDistance: 100,
   },
   plane: { blur: 2 },
+  shape: { profile: "mesh" },
   tint: { opacity: 0, saturate: 1 },
   edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
 }
@@ -37,6 +38,7 @@ const regular: GlassPreset = {
  * - `regular` the glass as it comes
  * - `clear` less frost and tint, to get out of the way of what is behind it
  * - `tinted` colored glass, whose color is the one given to the glass
+ * - `apple` the displacement profile fitted to Apple's Liquid Glass, drawn flat
  *
  * They are plain options: use one as is, or through {@link withPreset} to change some of it.
  *
@@ -55,14 +57,23 @@ export const glassPresets: Readonly<Record<GlassPresetName, Readonly<GlassPreset
       chromaticAberration: 0.3,
     },
     plane: { blur: 1 },
+    shape: { profile: "mesh" },
     tint: { opacity: 0.05, saturate: 1.8 },
     edge: { rim: 0.6, stroke: 0.75, elevation: "default", shadow: 0.55, presence: 0 },
   },
   tinted: {
     material: { ...regular.material },
     plane: { blur: 2 },
+    shape: { profile: "mesh" },
     tint: { opacity: 0.35, saturate: 1.4 },
     edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 1 },
+  },
+  apple: {
+    material: { ...regular.material },
+    plane: { blur: 2 },
+    shape: { profile: "apple", bezel: 16, shift: 25, curve: 2.5, dispersion: 0 },
+    tint: { opacity: 0, saturate: 1 },
+    edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
   },
 })
 

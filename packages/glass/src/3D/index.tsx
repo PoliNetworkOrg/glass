@@ -3,6 +3,7 @@ import { advance, Canvas, useThree } from "@react-three/fiber"
 import { motion, useMotionValueEvent } from "motion/react"
 import { useMemo, useRef } from "react"
 import { OrthographicCamera, type Texture } from "three"
+import { GlassDisplacement } from "./displacement"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
 import { SceneLights } from "./lights"
 import { GlassMesh } from "./mesh"
@@ -78,15 +79,27 @@ export function Glass3D(props: Glass3DProps) {
     >
       <AdaptiveDpr />
       <AdaptiveEvents />
-      <SceneLights settings={lighting} />
-      <GlassMesh
-        color={props.color}
-        bounds={props.bounds}
-        borderRadius={props.borderRadius}
-        cornerExponent={props.cornerExponent ?? 2}
-        shape={shape}
-        options={material}
-      />
+      {shape.profile === "apple" ? (
+        <GlassDisplacement
+          bounds={props.bounds}
+          borderRadius={props.borderRadius}
+          cornerExponent={props.cornerExponent ?? 2}
+          shape={shape}
+          texture={texture}
+        />
+      ) : (
+        <>
+          <SceneLights settings={lighting} />
+          <GlassMesh
+            color={props.color}
+            bounds={props.bounds}
+            borderRadius={props.borderRadius}
+            cornerExponent={props.cornerExponent ?? 2}
+            shape={shape}
+            options={material}
+          />
+        </>
+      )}
       <BGPlane texture={texture} bounds={props.bounds} options={plane} />
       <SyncSize bounds={props.bounds} />
       <Preload all />
