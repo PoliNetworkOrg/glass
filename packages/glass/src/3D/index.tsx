@@ -3,7 +3,6 @@ import { advance, Canvas, useThree } from "@react-three/fiber"
 import { motion, useMotionValueEvent } from "motion/react"
 import { useMemo, useRef } from "react"
 import { OrthographicCamera, type Texture } from "three"
-// import { useFailCondition } from "../utils/hooks"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
 import { SceneLights } from "./lights"
 import { GlassMesh } from "./mesh"
@@ -47,11 +46,6 @@ function SyncSize({ bounds }: { bounds: Glass3DProps["bounds"] }) {
 export function Glass3D(props: Glass3DProps) {
   // const [isSuspended, setIsSuspended] = useState(true)
   const { lighting, material, plane, shape, tint } = props.scene
-  // const gpu = useDetectGPU({
-  //   failIfMajorPerformanceCaveat: true,
-  // })
-  // useFailCondition(() => gpu.tier < 2)
-
   // const texture = suspend(getTexture, [document.documentElement, 0])
   const texture = props.texture
 

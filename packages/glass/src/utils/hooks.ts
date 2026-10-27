@@ -228,27 +228,6 @@ export function useComputedStyle<T extends HTMLElement, R>(transform: (style: CS
 }
 
 /**
- * # useFailCondition
- * React hook to trigger a suspense fail condition based on a dynamic check.
- *
- * @param check A function that returns a boolean indicating whether to trigger
- * the fail condition
- */
-export function useFailCondition(check: () => boolean) {
-  const condition = check()
-  const suspenderRef = useRef<Promise<never> | null>(null)
-
-  if (condition) {
-    if (!suspenderRef.current) {
-      suspenderRef.current = new Promise<never>(() => {})
-    }
-    throw suspenderRef.current
-  } else {
-    suspenderRef.current = null
-  }
-}
-
-/**
  * # useInView
  * Tells whether an element is on the screen, or about to be.
  *
