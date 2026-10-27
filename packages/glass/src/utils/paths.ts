@@ -18,7 +18,7 @@ export function createRoundedRect(
   height: number,
   radius: number,
   exponent: number = 2,
-  segments: number = 32
+  segments: number = 16
 ): ShapePath {
   const path = new ShapePath()
 

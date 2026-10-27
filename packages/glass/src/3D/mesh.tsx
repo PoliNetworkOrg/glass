@@ -53,7 +53,7 @@ export function GlassMesh(props: GlassMeshProps) {
       depth: 0,
       bevelEnabled: true,
       curveSegments: 32,
-      bevelSegments: 32,
+      bevelSegments: 16,
       bevelThickness: props.shape.depth,
       bevelSize,
       bevelOffset: 0,
