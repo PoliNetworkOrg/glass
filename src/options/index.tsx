@@ -6,13 +6,12 @@ import {
   SceneConfigSchema,
 } from "@polinetwork/glass"
 // import type { MeshTransmissionMaterialProps } from "@react-three/drei"
-import { useControls } from "leva"
+import { Leva, useControls } from "leva"
 import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { SchemaForm } from "./schema-form"
 import { getDefaultValues } from "./utils"
@@ -22,6 +21,10 @@ export function DemoOptions(props: {
   onDarkModeChange?: (isDark: boolean) => void
   isDarkMode?: boolean
 }) {
+  // first, so it is the first thing in the panel
+  const { preset } = useControls("Preset", {
+    preset: { value: "regular" as GlassPresetName, options: Object.keys(glassPresets) as GlassPresetName[] },
+  })
   const [material, setMaterial] = useControls(() => ({
     dithering: true,
     color: "#ffffff",
@@ -170,11 +173,12 @@ export function DemoOptions(props: {
     props.onDarkModeChange?.(!props.isDarkMode)
   }
 
-  const [preset, setPreset] = useState<GlassPresetName | "custom">("regular")
+  useEffect(() => {
+    handlePreset(preset)
+  }, [preset])
 
   const handlePreset = (name: GlassPresetName) => {
     const p = glassPresets[name]
-    setPreset(name)
     setConfig((c) => ({
       ...c,
       plane: { ...c.plane, ...p.plane },
@@ -190,6 +194,8 @@ export function DemoOptions(props: {
 
   return (
     <div glass-ignore="" className="fixed flex right-0 top-0 z-[1000] max-h-screen">
+      {/* leva sits at the same corner as this panel and would cover it, so it is moved to the left edge */}
+      <Leva titleBar={{ position: { x: -(window.innerWidth - 300), y: 0 } }} />
       <Button
         variant="secondary"
         size="icon"
@@ -213,23 +219,6 @@ export function DemoOptions(props: {
                 {props.isDarkMode ? "Dark" : "Light"} Mode
               </Label>
               <Switch id="dark-mode" checked={props.isDarkMode} onCheckedChange={handleDarkModeToggle} />
-            </div>
-
-            {/* Presets */}
-            <div className="flex items-center justify-between gap-4">
-              <Label>Preset</Label>
-              <Select value={preset} onValueChange={(v) => handlePreset(v as GlassPresetName)}>
-                <SelectTrigger className="w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(glassPresets).map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             {/* Schema-generated form */}
