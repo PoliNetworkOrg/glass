@@ -51,6 +51,20 @@ const THEMES = {
   },
 } as const
 
+/**
+ * The edges of a colored glass, which don't depend on the theme: the dark sides and the white tops of the themes
+ * are strong against a neutral glass but get lost in a color, so these are stronger.
+ */
+const TINTED = {
+  side: 0.5,
+  sideX: 1.5,
+  sideBlur: 3,
+  top: 1,
+  /** alpha stops of the stroke, from the top to the bottom edge */
+  stroke: [1, 0.6, 1, 0.6, 1],
+  strokeOpacity: 1,
+} as const
+
 /** The lit and the shaded edge of a glass of the color `tint`: the color toward white, and toward black */
 const litOf = (tint: string, alpha: number) =>
   `color-mix(in srgb, color-mix(in oklch, ${tint} 45%, white) ${(alpha * 100).toFixed(1)}%, transparent)`
@@ -80,11 +94,13 @@ const subscribeHdr = (onChange: () => void) => {
  * it is drawn.
  */
 function rimShadow(theme: GlassTheme, strength: number, hdr: boolean, tint?: string) {
-  const { side, sideX, sideBlur, top } = THEMES[theme]
-  const shade = (k: number) => (tint ? shadeOf(tint, side[3] * k * strength) : rgba(side, side[3] * k * strength))
+  const themed = THEMES[theme]
+  const { side, top } = themed
+  const { sideX, sideBlur } = tint ? TINTED : themed
+  const shade = (k: number) => (tint ? shadeOf(tint, TINTED.side * k * strength) : rgba(side, side[3] * k * strength))
   const light = (k: number) =>
     tint
-      ? litOf(tint, top[3] * k * strength)
+      ? litOf(tint, TINTED.top * k * strength)
       : hdr && theme === "light"
         ? `color(display-p3 2 2 2 / ${(top[3] * k * strength).toFixed(3)})`
         : rgba(top, top[3] * k * strength)
@@ -111,6 +127,10 @@ export function GlassEdge(props: GlassEdgeProps) {
   const { borderRadius, cornerShape, theme, rim, stroke, tint } = props
   const t = THEMES[theme]
   const hdr = useSyncExternalStore(subscribeHdr, supportsHdr, () => false)
+  // the stops of the stroke, from the top to the bottom edge: lit at the ends, shaded between
+  const stops = tint
+    ? TINTED.stroke.map((a, i) => (i % 4 === 0 ? litOf(tint, a) : shadeOf(tint, a)))
+    : t.stroke.map(([r, g, b, a]) => rgba([r, g, b], a))
 
   const shape: CSSProperties = {
     position: "absolute",
@@ -131,8 +151,8 @@ export function GlassEdge(props: GlassEdgeProps) {
           style={{
             ...shape,
             padding: 0.5,
-            background: `linear-gradient(to bottom, ${t.stroke.map(([r, g, b, a], i) => `${tint ? (i % 4 === 0 ? litOf(tint, a) : shadeOf(tint, a)) : rgba([r, g, b], a)} ${i * 25}%`).join(", ")})`,
-            opacity: t.strokeOpacity * stroke,
+            background: `linear-gradient(to bottom, ${stops.map((color, i) => `${color} ${i * 25}%`).join(", ")})`,
+            opacity: (tint ? TINTED.strokeOpacity : t.strokeOpacity) * stroke,
             // a ring: the padding box is cut out of the whole box
             WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
             WebkitMaskComposite: "xor",
