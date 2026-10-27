@@ -1,8 +1,9 @@
-import { Extrude, MeshTransmissionMaterial } from "@react-three/drei"
+import { MeshTransmissionMaterial } from "@react-three/drei"
 import { type MotionValue, useMotionValueEvent } from "motion/react"
-import { useCallback, useMemo, useRef } from "react"
-import type { ExtrudeGeometryOptions, Mesh, Shape } from "three"
+import { useCallback, useEffect, useMemo, useRef } from "react"
+import { ExtrudeGeometry, type ExtrudeGeometryOptions, type Mesh } from "three"
 import type { GlassConfig, ShapeConfig } from "../types/schemas"
+import { applyBevelProfile } from "../utils/bevel"
 import { createRoundedRect } from "../utils/paths"
 
 export type GlassMeshProps = {
@@ -41,7 +42,7 @@ export function GlassMesh(props: GlassMeshProps) {
   useMotionValueEvent(props.width, "change", updateGeometry)
   useMotionValueEvent(props.height, "change", updateGeometry)
 
-  const args = useMemo<[Shape[], ExtrudeGeometryOptions]>(() => {
+  const geometry = useMemo(() => {
     // the bevel can't be wider than half of the shortest side, or the inner shape would invert
     const maxBevel = Math.max(1, Math.min(startingWidth, startingHeight) / 2 - 1)
     const bevelSize = Math.min(props.shape.bezel, maxBevel)
@@ -61,12 +62,15 @@ export function GlassMesh(props: GlassMeshProps) {
       bevelSize,
       bevelOffset: 0,
     }
-    return [shape.toShapes(false), extrudeSettings]
-  }, [props.borderRadius, props.shape.bezel, props.shape.depth, startingWidth, startingHeight])
+    const geometry = new ExtrudeGeometry(shape.toShapes(false), extrudeSettings)
+    return applyBevelProfile(geometry, props.shape.depth, props.shape.curve)
+  }, [props.borderRadius, props.shape.bezel, props.shape.depth, props.shape.curve, startingWidth, startingHeight])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
 
   return (
-    <Extrude ref={geom} position={[0, 0, 0]} args={args}>
+    <mesh ref={geom} geometry={geometry}>
       <MeshTransmissionMaterial {...options} />
-    </Extrude>
+    </mesh>
   )
 }
