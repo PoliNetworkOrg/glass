@@ -73,7 +73,7 @@ export function Glass3D(props: Glass3DProps) {
       <AdaptiveDpr />
       <AdaptiveEvents />
       <SceneLights settings={lighting} />
-      <GlassMesh color={props.color} width={width} height={height} borderRadius={16} options={material} />
+      <GlassMesh color={props.color} width={width} height={height} borderRadius={props.borderRadius} options={material} />
       <BGPlane texture={texture} bounds={props.bounds} options={plane} />
       <Preload all />
     </MotCanv>
