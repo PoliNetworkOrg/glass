@@ -12,6 +12,8 @@ export type GlassEdgeProps = {
   rim: number
   /** Strength of the hairline stroke around the edge, 0 is none */
   stroke: number
+  /** The color of a tinted glass: its edges are light and shade of it instead of white and black */
+  tint?: string
 }
 
 // The values are the ones of Vitrium, measured against iOS: the sides of the glass are shaded, and the
@@ -49,6 +51,12 @@ const THEMES = {
   },
 } as const
 
+/** The lit and the shaded edge of a glass of the color `tint`: the color toward white, and toward black */
+const litOf = (tint: string, alpha: number) =>
+  `color-mix(in srgb, color-mix(in oklch, ${tint} 45%, white) ${(alpha * 100).toFixed(1)}%, transparent)`
+const shadeOf = (tint: string, alpha: number) =>
+  `color-mix(in srgb, color-mix(in oklch, ${tint} 55%, black) ${(alpha * 100).toFixed(1)}%, transparent)`
+
 const rgba = ([r, g, b]: readonly number[], a: number) => `rgb(${r} ${g} ${b} / ${a.toFixed(3)})`
 
 /**
@@ -71,13 +79,15 @@ const subscribeHdr = (onChange: () => void) => {
  * sigma deeper) instead of a blurred inset shadow, which costs a full blur of the element every time
  * it is drawn.
  */
-function rimShadow(theme: GlassTheme, strength: number, hdr: boolean) {
+function rimShadow(theme: GlassTheme, strength: number, hdr: boolean, tint?: string) {
   const { side, sideX, sideBlur, top } = THEMES[theme]
-  const shade = (k: number) => rgba(side, side[3] * k * strength)
+  const shade = (k: number) => (tint ? shadeOf(tint, side[3] * k * strength) : rgba(side, side[3] * k * strength))
   const light = (k: number) =>
-    hdr && theme === "light"
-      ? `color(display-p3 2 2 2 / ${(top[3] * k * strength).toFixed(3)})`
-      : rgba(top, top[3] * k * strength)
+    tint
+      ? litOf(tint, top[3] * k * strength)
+      : hdr && theme === "light"
+        ? `color(display-p3 2 2 2 / ${(top[3] * k * strength).toFixed(3)})`
+        : rgba(top, top[3] * k * strength)
   return [
     `inset ${-sideX}px 0 0 0 ${shade(0.5)}`,
     `inset ${-sideX}px 0 0 ${sideBlur * 0.5}px ${shade(0.3)}`,
@@ -98,7 +108,7 @@ function rimShadow(theme: GlassTheme, strength: number, hdr: boolean) {
  * to the shape of the glass.
  */
 export function GlassEdge(props: GlassEdgeProps) {
-  const { borderRadius, cornerShape, theme, rim, stroke } = props
+  const { borderRadius, cornerShape, theme, rim, stroke, tint } = props
   const t = THEMES[theme]
   const hdr = useSyncExternalStore(subscribeHdr, supportsHdr, () => false)
 
@@ -113,7 +123,7 @@ export function GlassEdge(props: GlassEdgeProps) {
   return (
     <>
       {rim > 0 && (
-        <div className="_polinetwork_glass-rim" style={{ ...shape, boxShadow: rimShadow(theme, rim, hdr) }} />
+        <div className="_polinetwork_glass-rim" style={{ ...shape, boxShadow: rimShadow(theme, rim, hdr, tint) }} />
       )}
       {stroke > 0 && (
         <div
@@ -121,7 +131,7 @@ export function GlassEdge(props: GlassEdgeProps) {
           style={{
             ...shape,
             padding: 0.5,
-            background: `linear-gradient(to bottom, ${t.stroke.map(([r, g, b, a], i) => `${rgba([r, g, b], a)} ${i * 25}%`).join(", ")})`,
+            background: `linear-gradient(to bottom, ${t.stroke.map(([r, g, b, a], i) => `${tint ? (i % 4 === 0 ? litOf(tint, a) : shadeOf(tint, a)) : rgba([r, g, b], a)} ${i * 25}%`).join(", ")})`,
             opacity: t.strokeOpacity * stroke,
             // a ring: the padding box is cut out of the whole box
             WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",

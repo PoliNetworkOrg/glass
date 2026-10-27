@@ -9,7 +9,7 @@ import { useGlassCapability } from "./utils/capability"
 import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
 import { attachGlassPress } from "./utils/press"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
-import { themeFromColor } from "./utils/theme"
+import { isColored, themeFromColor } from "./utils/theme"
 
 export type GlassProps = {
   children: React.ReactNode
@@ -90,6 +90,8 @@ export function Glass(props: GlassProps) {
   }, [interactive, claimTouch, outer])
 
   const resolvedTheme = theme ?? themeFromColor(color)
+  // a colored glass has edges of its color, a neutral one the white and black of its theme
+  const edgeTint = scene.tint.opacity > 0 && isColored(color) ? color : undefined
 
   const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius, cornerExponent }
 
@@ -161,6 +163,7 @@ export function Glass(props: GlassProps) {
           theme={resolvedTheme}
           rim={scene.edge.rim}
           stroke={scene.edge.stroke}
+          tint={edgeTint}
         />
       </div>
       <GlassNestContext.Provider value={true}>{children}</GlassNestContext.Provider>
