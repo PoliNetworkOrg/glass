@@ -1,3 +1,4 @@
+export type { GlassTheme } from "./edge"
 export { Glass } from "./glass"
 export { GlassProvider } from "./glass-provider"
 export { type GlassPreset, type GlassPresetName, glassPresets, withPreset } from "./presets"

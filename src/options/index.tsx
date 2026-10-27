@@ -184,6 +184,7 @@ export function DemoOptions(props: {
       plane: { ...c.plane, ...p.plane },
       shape: { ...c.shape, ...p.shape },
       tint: { ...c.tint, ...p.tint },
+      edge: { ...c.edge, ...p.edge },
     }))
     setMaterial(p.material as Parameters<typeof setMaterial>[0])
   }

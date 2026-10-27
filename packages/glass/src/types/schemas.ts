@@ -92,6 +92,23 @@ export const TintSchema = z
   })
   .default({ opacity: 0, saturate: 1 })
 
+export const EdgeSchema = z
+  .object({
+    rim: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(1)
+      .meta({ description: "Strength of the highlight on the edges of the glass. 0 is none." }),
+    stroke: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(1)
+      .meta({ description: "Strength of the hairline stroke around the glass. 0 is none." }),
+  })
+  .default({ rim: 1, stroke: 1 })
+
 export const LightingSchema = z
   .object({
     ambient: z.object({
@@ -139,6 +156,7 @@ export const SceneConfigSchema = z.object({
   plane: PlaneSchema,
   shape: ShapeSchema,
   tint: TintSchema,
+  edge: EdgeSchema,
   lighting: LightingSchema,
 })
 
@@ -148,4 +166,5 @@ export type SceneConfig = z.infer<typeof SceneConfigSchema> & {
 }
 export type ShapeConfig = z.infer<typeof ShapeSchema>
 export type TintConfig = z.infer<typeof TintSchema>
+export type EdgeConfig = z.infer<typeof EdgeSchema>
 export type PlaneConfig = z.infer<typeof PlaneSchema>

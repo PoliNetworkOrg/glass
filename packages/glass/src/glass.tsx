@@ -3,9 +3,11 @@ import { Suspense } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { useGlass } from "./context"
+import { GlassEdge, type GlassTheme } from "./edge"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useComputedStyle, useIncreasedContrast, useMotionBounds } from "./utils/hooks"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
+import { themeFromColor } from "./utils/theme"
 
 export type GlassProps = {
   children: React.ReactNode
@@ -16,6 +18,8 @@ export type GlassProps = {
   /** Force reduce motion (disables 3D glass effect) */
   disable3D?: boolean
   force3D?: boolean
+  /** Theme of the glass, which sets the light on its edges. By default it follows the color. */
+  theme?: GlassTheme
 } & React.HTMLAttributes<HTMLDivElement>
 
 /**
@@ -31,7 +35,7 @@ export type GlassProps = {
  * it falls back to a simpler glass effect using pure CSS.
  */
 export function Glass(props: GlassProps) {
-  const { children, options, color, disable3D, force3D, ...rest } = props
+  const { children, options, color, disable3D, force3D, theme, ...rest } = props
   const scene = SceneConfigSchema.parse(options)
   const { texture } = useGlass()
 
@@ -103,6 +107,13 @@ export function Glass(props: GlassProps) {
         ) : (
           <GlassFallback {...commonProps} />
         )}
+        <GlassEdge
+          borderRadius={borderRadius}
+          cornerShape={corners?.shape || undefined}
+          theme={theme ?? themeFromColor(color)}
+          rim={scene.edge.rim}
+          stroke={scene.edge.stroke}
+        />
       </div>
       {children}
     </div>
