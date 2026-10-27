@@ -40,10 +40,12 @@ export function GlassMesh(props: GlassMeshProps) {
   useMotionValueEvent(props.height, "change", updateGeometry)
 
   const args = useMemo<[Shape[], ExtrudeGeometryOptions]>(() => {
-    const bevelSize = props.borderRadius / 2 + 16
+    // the bevel can't be wider than half of the shortest side, or the inner shape would invert
+    const maxBevel = Math.max(1, Math.min(startingWidth, startingHeight) / 2 - 1)
+    const bevelSize = Math.min(props.borderRadius / 2 + 16, maxBevel)
     const shape = createRoundedRect(
-      startingWidth - bevelSize * 2,
-      startingHeight - bevelSize * 2,
+      Math.max(1, startingWidth - bevelSize * 2),
+      Math.max(1, startingHeight - bevelSize * 2),
       props.borderRadius / 2
     )
     const extrudeSettings: ExtrudeGeometryOptions = {
