@@ -27,29 +27,32 @@ export type GlassEdgeProps = {
 const THEMES = {
   light: {
     /** [r, g, b], and its alpha */
-    side: [0, 0, 0, 0.25],
+    side: [0, 0, 0, 0.04],
     sideX: 1,
     sideBlur: 2,
     top: [255, 255, 255, 1],
-    /** [r, g, b, alpha] stops of the stroke, from the top to the bottom edge */
+    /**
+     * [r, g, b, alpha] stops of the stroke, from the top to the bottom edge: a faint black line all around (Apple's, measured
+     * on a tab bar over a white page)
+     */
     stroke: [
-      [255, 255, 255, 1],
-      [94, 94, 94, 0.25],
-      [94, 94, 94, 0.8],
-      [94, 94, 94, 0.25],
-      [255, 255, 255, 1],
+      [0, 0, 0, 0.2],
+      [0, 0, 0, 0.17],
+      [0, 0, 0, 0.13],
+      [0, 0, 0, 0.17],
+      [0, 0, 0, 0.2],
     ],
     strokeOpacity: 0.8,
   },
   dark: {
-    side: [0, 0, 0, 1],
+    side: [0, 0, 0, 0.75],
     sideX: 1.5,
     sideBlur: 3,
     top: [255, 255, 255, 0.2],
     stroke: [
       [223, 223, 223, 0.35],
       [41, 41, 41, 0.5],
-      [0, 0, 0, 1],
+      [0, 0, 0, 0.85],
       [41, 41, 41, 0.5],
       [223, 223, 223, 0.35],
     ],
