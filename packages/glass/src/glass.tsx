@@ -5,6 +5,7 @@ import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
+import { useGlassCapability } from "./utils/capability"
 import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
 import { themeFromColor } from "./utils/theme"
@@ -17,6 +18,7 @@ export type GlassProps = {
   color: string
   /** Force reduce motion (disables 3D glass effect) */
   disable3D?: boolean
+  /** Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion */
   force3D?: boolean
   /** Theme of the glass, which sets the light on its edges. By default it follows the color. */
   theme?: GlassTheme
@@ -53,7 +55,9 @@ export function Glass(props: GlassProps) {
   const reducedMotion = useReducedMotion()
   const increasedContrast = useIncreasedContrast()
   const inView = useInView(outer)
-  const do3D = texture && inView && ((!disable3D && !reducedMotion && !increasedContrast) || force3D)
+  const capable = useGlassCapability()
+  const do3D =
+    texture && inView && ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
 
   const resolvedTheme = theme ?? themeFromColor(color)
 
