@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react"
+import { type CSSProperties, useSyncExternalStore } from "react"
 
 export type GlassTheme = "light" | "dark"
 
@@ -52,14 +52,32 @@ const THEMES = {
 const rgba = ([r, g, b]: readonly number[], a: number) => `rgb(${r} ${g} ${b} / ${a.toFixed(3)})`
 
 /**
+ * Whether the screen has the headroom for colors brighter than white. In light mode the lit edges are
+ * already the brightest white the SDR range has, so there they barely read: on an HDR screen they are
+ * pushed past it, in display-p3, which is extended range.
+ */
+const HDR_QUERY = "(dynamic-range: high)"
+const supportsHdr = () =>
+  typeof matchMedia === "function" && matchMedia(HDR_QUERY).matches && CSS.supports("color", "color(display-p3 1 1 1)")
+const subscribeHdr = (onChange: () => void) => {
+  if (typeof matchMedia !== "function") return () => {}
+  const query = matchMedia(HDR_QUERY)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+/**
  * Each edge is a soft band, drawn as two unblurred layers (half of the color at the offset and 30% one
  * sigma deeper) instead of a blurred inset shadow, which costs a full blur of the element every time
  * it is drawn.
  */
-function rimShadow(theme: GlassTheme, strength: number) {
+function rimShadow(theme: GlassTheme, strength: number, hdr: boolean) {
   const { side, sideX, sideBlur, top } = THEMES[theme]
   const shade = (k: number) => rgba(side, side[3] * k * strength)
-  const light = (k: number) => rgba(top, top[3] * k * strength)
+  const light = (k: number) =>
+    hdr && theme === "light"
+      ? `color(display-p3 2 2 2 / ${(top[3] * k * strength).toFixed(3)})`
+      : rgba(top, top[3] * k * strength)
   return [
     `inset ${-sideX}px 0 0 0 ${shade(0.5)}`,
     `inset ${-sideX}px 0 0 ${sideBlur * 0.5}px ${shade(0.3)}`,
@@ -82,6 +100,7 @@ function rimShadow(theme: GlassTheme, strength: number) {
 export function GlassEdge(props: GlassEdgeProps) {
   const { borderRadius, cornerShape, theme, rim, stroke } = props
   const t = THEMES[theme]
+  const hdr = useSyncExternalStore(subscribeHdr, supportsHdr, () => false)
 
   const shape: CSSProperties = {
     position: "absolute",
@@ -93,7 +112,9 @@ export function GlassEdge(props: GlassEdgeProps) {
 
   return (
     <>
-      {rim > 0 && <div className="_polinetwork_glass-rim" style={{ ...shape, boxShadow: rimShadow(theme, rim) }} />}
+      {rim > 0 && (
+        <div className="_polinetwork_glass-rim" style={{ ...shape, boxShadow: rimShadow(theme, rim, hdr) }} />
+      )}
       {stroke > 0 && (
         <div
           className="_polinetwork_glass-stroke"
