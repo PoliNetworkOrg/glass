@@ -39,6 +39,7 @@ A `div` (it takes the usual props) with the glass drawn behind its children.
 | `options` | The [configuration](#configuration) of the glass, or a [preset](#presets). |
 | `color` | The color of the glass: laid over it by `tint.opacity`, and the base of the CSS version. |
 | `theme` | `light` or `dark`, which sets the light on the edges. By default it follows the lightness of `color`. |
+| `interactive` | For glass that is a control: it lifts on hover (1.045), and snaps down (0.94) and is lit (brighter, more saturated) while pressed, then springs back. With `prefers-reduced-motion` it doesn't move and is only lit. Default `false`. |
 | `force3D` | Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion. |
 | `disable3D` | Always use the CSS glass. |
 
