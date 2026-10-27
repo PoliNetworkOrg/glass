@@ -59,8 +59,8 @@ available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the d
 
 | | |
 | --- | --- |
-| `regular` | Frosted glass, the default. |
-| `clear` | No frost and little tint, with a touch of color split at the rim, to get out of the way of what is behind it. |
+| `regular` | The default: a light frost (2px) under a strong tint (66%) of the glass color, as measured on Apple's tab bar. |
+| `clear` | Half the frost and tint, the colors behind pushed up (saturation 1.8), to get out of the way of what is behind it. |
 | `tinted` | Colored glass: its color is the `color` of the glass. |
 
 ## Configuration
@@ -69,14 +69,14 @@ All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
 
 | Field | Range | Default | |
 | --- | --- | --- | --- |
-| `plane.blur` | 0 – 100 | 2 | Blur of the captured background (see `GlassProvider`). |
+| `plane.blur` | 0 – 100 | 0 | Blur of the captured background (see `GlassProvider`). |
 | `shape.bezel` | 1 – 64 | 16 | Width of the bent band at the edge, in px. |
 | `shape.shift` | 0 – 64 | 25 | How far in from the rim the very edge samples, in px. |
 | `shape.curve` | 0.5 – 6 | 2.5 | How the bend grows toward the rim. Higher keeps the face flat longer and bends more at the edge. |
 | `shape.scaling` | 0 – 1 | 0.4 | How much `bezel` and `shift` grow on elements whose shortest side is over 64px (the size the profile was fitted on): they are multiplied by `(side / 64) ** scaling`. 0 keeps them as set. |
 | `shape.dispersion` | 0 – 1 | 0 | How much further the red bends than the blue, which splits the colors at the rim. |
-| `surface.frost` | 0 – 32 | 4 | How much the glass blurs what is behind it, in px. Per glass, on top of `plane.blur`. |
-| `tint.opacity` | 0 – 1 | 0 | How much of `color` is laid over the glass. |
+| `surface.frost` | 0 – 32 | 2 | How much the glass blurs what is behind it, in px. Per glass, on top of `plane.blur`. |
+| `tint.opacity` | 0 – 1 | 0.66 | How much of `color` is laid over the glass. |
 | `tint.saturate` | 0.5 – 3 | 1 | Saturation of what is seen through the glass. |
 | `edge.rim` | 0 – 1 | 1 | Strength of the highlight on the edges. |
 | `edge.stroke` | 0 – 1 | 1 | Strength of the hairline stroke around the glass. |

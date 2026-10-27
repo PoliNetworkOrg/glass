@@ -14,8 +14,9 @@ export type GlassPresetName = "regular" | "clear" | "tinted"
 /**
  * Ready made configurations of the glass.
  *
- * - `regular` frosted glass, the one that comes by default
- * - `clear` almost no frost or tint, to get out of the way of what is behind it
+ * - `regular` the one that comes by default: a light frost under a strong tint of the glass color (neutral for
+ *   a neutral color), as measured on Apple's tab bar
+ * - `clear` half the tint and frost, and the colors of what is behind it pushed up, to get out of the way of it
  * - `tinted` colored glass, whose color is the one given to the glass
  *
  * They are plain options: use one as is, or through {@link withPreset} to change some of it.
@@ -26,24 +27,24 @@ export type GlassPresetName = "regular" | "clear" | "tinted"
  */
 export const glassPresets: Readonly<Record<GlassPresetName, Readonly<GlassPreset>>> = Object.freeze({
   regular: {
-    plane: { blur: 2 },
+    plane: { blur: 0 },
     shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
-    surface: { frost: 4 },
-    tint: { opacity: 0, saturate: 1 },
+    surface: { frost: 2 },
+    tint: { opacity: 0.66, saturate: 1 },
     edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
   },
   clear: {
-    plane: { blur: 1 },
-    shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0.1 },
-    surface: { frost: 0 },
-    tint: { opacity: 0.05, saturate: 1.2 },
+    plane: { blur: 0 },
+    shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
+    surface: { frost: 1 },
+    tint: { opacity: 0.35, saturate: 1.8 },
     edge: { rim: 0.6, stroke: 0.75, elevation: "default", shadow: 0.55, presence: 0 },
   },
   tinted: {
-    plane: { blur: 2 },
+    plane: { blur: 0 },
     shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
-    surface: { frost: 4 },
-    tint: { opacity: 0.35, saturate: 1.4 },
+    surface: { frost: 2 },
+    tint: { opacity: 0.6, saturate: 1 },
     edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 1 },
   },
 })

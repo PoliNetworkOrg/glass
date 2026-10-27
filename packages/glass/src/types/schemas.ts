@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 export const PlaneSchema = z.object({
-  blur: z.number().min(0).max(100).default(2).meta({ description: "Blur amount for the background plane." }),
+  blur: z.number().min(0).max(100).default(0).meta({ description: "Blur amount for the background plane." }),
 })
 
 export const ShapeSchema = z
@@ -31,11 +31,11 @@ export const ShapeSchema = z
 
 export const SurfaceSchema = z
   .object({
-    frost: z.number().min(0).max(32).default(4).meta({
+    frost: z.number().min(0).max(32).default(2).meta({
       description: "How much the glass blurs what is behind it, in px. 0 is clear glass.",
     }),
   })
-  .default({ frost: 4 })
+  .default({ frost: 2 })
 
 export const TintSchema = z
   .object({
@@ -43,13 +43,13 @@ export const TintSchema = z
       .number()
       .min(0)
       .max(1)
-      .default(0)
+      .default(0.66)
       .meta({ description: "How much of the glass color is laid over the glass. 0 is plain glass." }),
     saturate: z.number().min(0.5).max(3).default(1).meta({
       description: "Saturation of what is seen through the glass. Keeps a tint from dragging the hue of the backdrop.",
     }),
   })
-  .default({ opacity: 0, saturate: 1 })
+  .default({ opacity: 0.66, saturate: 1 })
 
 export const EdgeSchema = z
   .object({

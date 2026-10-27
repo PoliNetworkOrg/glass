@@ -74,16 +74,18 @@ const FRAGMENT = /* glsl */ `
     return texture2D(uMap, uv).rgb;
   }
 
-  // the backdrop blurred over a disc of radius uFrost px: the center, an inner ring and an outer ring
+  // the backdrop averaged over a disc of radius uFrost px: taps on a spiral that covers it evenly, turned a little
+  // differently at every pixel so that what is left of the taps is grain and not a ghost of the image
   vec3 frosted(vec2 p) {
     vec3 c = sampleAt(p);
     if (uFrost <= 0.0) return c;
-    for (int i = 0; i < 8; i++) {
-      float a = float(i) * 0.785398;
-      vec2 d = vec2(cos(a), sin(a));
-      c += sampleAt(p + d * uFrost * 0.5) + sampleAt(p + d * uFrost);
+    float turn = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2831853;
+    for (int i = 0; i < 24; i++) {
+      float r = sqrt((float(i) + 0.5) / 24.0) * uFrost;
+      float a = float(i) * 2.39996323 + turn;
+      c += sampleAt(p + vec2(cos(a), sin(a)) * r);
     }
-    return c / 17.0;
+    return c / 25.0;
   }
 
   void main() {
