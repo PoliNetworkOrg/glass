@@ -2,6 +2,7 @@ import { PlusCircle } from "lucide-react"
 import { z } from "zod"
 import { Button } from "../components/ui/button"
 import { Label } from "../components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { Separator } from "../components/ui/separator"
 import { Slider } from "../components/ui/slider"
 import { Switch } from "../components/ui/switch"
@@ -32,6 +33,31 @@ export function FieldRenderer<T extends z.ZodType>({ schema: sk, value, path, on
       <div className="flex items-center justify-between">
         <Label htmlFor={path.join(".")}>{label}</Label>
         <Switch id={path.join(".")} checked={Boolean(value)} onCheckedChange={cb} />
+      </div>
+    )
+  }
+
+  // Handle enum (select)
+  if (schema.def.type === "enum") {
+    const options = (schema as unknown as z.ZodEnum).options as string[]
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor={path.join(".")}>{label}</Label>
+          <Select value={String(value)} onValueChange={cb}>
+            <SelectTrigger id={path.join(".")} className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
     )
   }

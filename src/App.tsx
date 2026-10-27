@@ -56,7 +56,7 @@ function App() {
             }}
           >
             <Glass
-              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl overflow-hidden"
+              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl"
               color={glassColor}
               options={glassOptions}
               force3D
@@ -65,7 +65,7 @@ function App() {
               <span className="text-sm text-muted-foreground">Rendered with WebGL</span>
             </Glass>
             <Glass
-              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl overflow-hidden"
+              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl"
               color={glassColor}
               options={glassOptions}
               disable3D
