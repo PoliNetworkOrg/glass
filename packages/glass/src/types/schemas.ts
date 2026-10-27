@@ -89,6 +89,10 @@ export const ShapeSchema = z
       .max(64)
       .default(25)
       .meta({ description: "Apple profile only: how far in from the rim the very edge samples, in px." }),
+    scaling: z.number().min(0).max(1).default(0.4).meta({
+      description:
+        "Apple profile only: how much the bezel and shift grow on elements larger than 64px. 0 keeps them as set, 1 makes them proportional to the size.",
+    }),
     dispersion: z.number().min(0).max(1).default(0).meta({
       description: "Apple profile only: how much further the red bends than the blue, to split the colors at the rim.",
     }),
@@ -97,7 +101,17 @@ export const ShapeSchema = z
         "Bends the face like a lens. Positive values magnify what is behind the glass, negative values shrink it. Past about 0.3 it breaks up.",
     }),
   })
-  .default({ profile: "mesh", bezel: 16, depth: 16, curve: 2.5, shift: 25, dispersion: 0, lens: 0, dispersionRim: 0 })
+  .default({
+    profile: "mesh",
+    bezel: 16,
+    depth: 16,
+    curve: 2.5,
+    shift: 25,
+    scaling: 0.4,
+    dispersion: 0,
+    lens: 0,
+    dispersionRim: 0,
+  })
 
 export const TintSchema = z
   .object({

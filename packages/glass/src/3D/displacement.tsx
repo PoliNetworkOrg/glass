@@ -16,6 +16,9 @@ export type GlassDisplacementProps = {
   texture: Texture
 }
 
+/** The shortest side, in px, of the controls the apple profile was fitted on */
+const FITTED_SIZE = 64
+
 const VERTEX = /* glsl */ `
   uniform vec2 uSize;
   varying vec2 vPos;
@@ -131,9 +134,12 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
     u.uSize.value.set(w, h)
     u.uRadius.value = Math.max(0, Math.min(borderRadius, w / 2, h / 2))
     u.uExp.value = cornerExponent
+    // the profile was measured on small controls, where 25px of shift is a lot: a bigger surface bends over a wider
+    // band and further, as real glass does, so both grow with the shortest side past the size they were fitted at
+    const grow = Math.max(1, (half * 2) / FITTED_SIZE) ** shape.scaling
     // a surface smaller than two bezels is all bend: the bezel shrinks to fit, and the shift stops at the middle
-    u.uBezel.value = Math.max(1, Math.min(shape.bezel, half))
-    u.uShift.value = Math.max(0, Math.min(shape.shift, half))
+    u.uBezel.value = Math.max(1, Math.min(shape.bezel * grow, half))
+    u.uShift.value = Math.max(0, Math.min(shape.shift * grow, half))
     u.uCurve.value = shape.curve
     u.uDispersion.value = shape.dispersion
     mesh.current?.scale.set(w, h, 1)

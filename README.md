@@ -73,10 +73,11 @@ All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
 | `material` | | | Props of drei's [`MeshTransmissionMaterial`](https://github.com/pmndrs/drei#meshtransmissionmaterial). |
 | `plane.blur` | 0 – 100 | 2 | Blur of the background (see `GlassProvider`). |
 | `shape.profile` | `mesh` `apple` | `mesh` | How the glass bends what is behind it, see [Refraction profiles](#refraction-profiles). |
-| `shape.bezel` | 1 – 64 | 16 | Width of the bent band at the edge in px. Fixed: it doesn't scale with the element. Both profiles. |
+| `shape.bezel` | 1 – 64 | 16 | Width of the bent band at the edge in px. Fixed for `mesh`; `apple` grows it with the element (`shape.scaling`). |
 | `shape.depth` | 0 – 64 | 16 | `mesh`: how far the bevel rises from the face. More bends the backdrop more. |
 | `shape.curve` | 0.5 – 6 | 2.5 | How the bend grows toward the rim. Higher keeps the face flat longer and bends more at the edge. Both profiles. |
 | `shape.shift` | 0 – 64 | 25 | `apple`: how far in from the rim the very edge samples, in px. |
+| `shape.scaling` | 0 – 1 | 0.4 | `apple`: how much `bezel` and `shift` grow on elements whose shortest side is over 64px (the size the profile was fitted on): they are multiplied by `(side / 64) ** scaling`. 0 keeps them as set. |
 | `shape.dispersion` | 0 – 1 | 0 | `apple`: how much further the red bends than the blue, which splits the colors at the rim. |
 | `shape.dispersionRim` | 0 – 1 | 0 | `mesh`: where the chromatic aberration (`material.chromaticAberration`) is: 0 spreads it evenly over the glass, 1 puts it all at the rim, where the surface is curved. |
 | `shape.lens` | -0.3 – 0.3 | 0 | `mesh`: bends the face like a lens: positive magnifies what is behind the glass, negative shrinks it. |
