@@ -1,5 +1,5 @@
 import { useReducedMotion } from "motion/react"
-import { Suspense, useContext } from "react"
+import { Suspense, useContext, useMemo } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { GlassNestContext, useGlass } from "./context"
@@ -39,7 +39,7 @@ export type GlassProps = {
 export function Glass(props: GlassProps) {
   const { children, options, color, disable3D, force3D, theme, ...rest } = props
   const scene = SceneConfigSchema.parse(options)
-  const { texture } = useGlass()
+  const { texture, enabled } = useGlass()
   const nested = useContext(GlassNestContext)
 
   const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
@@ -55,9 +55,15 @@ export function Glass(props: GlassProps) {
   const reducedMotion = useReducedMotion()
   const increasedContrast = useIncreasedContrast()
   const inView = useInView(outer)
+  // a region of the page can opt out with data-glass-off, which is read when the glass comes into view
+  const optedOut = useMemo(() => inView && Boolean(outer.current?.closest("[data-glass-off]")), [inView, outer])
   const capable = useGlassCapability()
   const do3D =
-    texture && inView && ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
+    enabled &&
+    !optedOut &&
+    texture &&
+    inView &&
+    ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
 
   const resolvedTheme = theme ?? themeFromColor(color)
 

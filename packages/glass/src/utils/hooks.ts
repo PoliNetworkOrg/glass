@@ -32,9 +32,11 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
  * since calling {@link html2canvas} can be quite heavy.
  *
  * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
+ * @param blur Blur amount for the texture
+ * @param enabled When false nothing is captured, which is the expensive part, and there is no texture
  * @returns The current background texture, or null if not yet loaded
  */
-export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Texture | null {
+export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, enabled: boolean = true): Texture | null {
   const promiseRef = useRef<Promise<Texture> | null>(null) // current texture promise
   const secondRef = useRef<boolean>(false) // flag to indicate if a second update is needed
   const [texture, setTexture] = useState<Texture | null>(null)
@@ -55,6 +57,7 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Te
 
   // Function to dispatch texture update
   const dispatchUpdate = useCallback(() => {
+    if (!enabled) return
     if (!promiseRef.current) {
       // if no update is in progress, start one
       void updateTexture()
@@ -62,9 +65,13 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Te
       // if an update is already in progress, mark for a second update
       secondRef.current = true
     }
-  }, [updateTexture])
+  }, [updateTexture, enabled])
 
   useEffect(() => {
+    if (!enabled) {
+      setTexture(null)
+      return
+    }
     const observer = new ResizeObserver(() => {
       dispatchUpdate()
     })
@@ -72,11 +79,14 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Te
     return () => {
       observer.disconnect()
     }
-  }, [dispatchUpdate])
+  }, [dispatchUpdate, enabled])
 
   useEffect(() => {
     dispatchUpdate()
   }, deps)
+
+  // a texture is the whole page, so the one that was replaced has to be freed, or each capture leaves one on the GPU
+  useEffect(() => () => texture?.dispose(), [texture])
 
   return texture
 }

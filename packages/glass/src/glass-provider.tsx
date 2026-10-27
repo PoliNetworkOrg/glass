@@ -7,6 +7,8 @@ export type GlassProviderProps = {
   deps?: unknown[]
   /** Blur amount for the background texture */
   blur?: number
+  /** Turns the 3D glass off for the whole tree, and stops capturing the background. Default: true */
+  enabled?: boolean
 }
 
 /**
@@ -16,6 +18,7 @@ export type GlassProviderProps = {
  * Handles fetching and updating the background texture based on the provided dependencies.
  */
 export function GlassProvider(props: GlassProviderProps) {
-  const texture = useBackgroundTexture(props.deps, props.blur)
-  return <GlassContext.Provider value={{ texture }}>{props.children}</GlassContext.Provider>
+  const enabled = props.enabled ?? true
+  const texture = useBackgroundTexture(props.deps, props.blur, enabled)
+  return <GlassContext.Provider value={{ texture, enabled }}>{props.children}</GlassContext.Provider>
 }
