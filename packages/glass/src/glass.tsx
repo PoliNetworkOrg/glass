@@ -1,5 +1,5 @@
 import { useReducedMotion } from "motion/react"
-import { Suspense, useContext, useMemo } from "react"
+import { Suspense, useContext, useEffect, useMemo } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { GlassNestContext, useGlass } from "./context"
@@ -7,7 +7,7 @@ import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useGlassCapability } from "./utils/capability"
 import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
-import { useGlassInteraction } from "./utils/interaction"
+import { attachGlassPress } from "./utils/press"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
 import { themeFromColor } from "./utils/theme"
 
@@ -23,8 +23,14 @@ export type GlassProps = {
   force3D?: boolean
   /** Theme of the glass, which sets the light on its edges. By default it follows the color. */
   theme?: GlassTheme
-  /** Lifts on hover, and snaps down and lights up while pressed, for glass that is a control. Default: false */
+  /**
+   * For glass that is a control: it lifts on hover, snaps down and lights up while pressed, and stretches toward the
+   * pointer when dragged, then springs back. A drag is a gesture, so the click that would follow it is swallowed.
+   * Default: false
+   */
   interactive?: boolean
+  /** An interactive glass above the content (a fixed header, a popover): a touch on it never scrolls what is under it */
+  claimTouch?: boolean
 } & React.HTMLAttributes<HTMLDivElement>
 
 /**
@@ -40,7 +46,17 @@ export type GlassProps = {
  * it falls back to a simpler glass effect using pure CSS.
  */
 export function Glass(props: GlassProps) {
-  const { children, options, color, disable3D, force3D, theme, interactive = false, ...rest } = props
+  const {
+    children,
+    options,
+    color,
+    disable3D,
+    force3D,
+    theme,
+    interactive = false,
+    claimTouch = false,
+    ...rest
+  } = props
   const scene = SceneConfigSchema.parse(options)
   const { texture, enabled } = useGlass()
   const nested = useContext(GlassNestContext)
@@ -68,7 +84,10 @@ export function Glass(props: GlassProps) {
     inView &&
     ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
 
-  const interaction = useGlassInteraction<HTMLDivElement>(interactive, Boolean(reducedMotion), rest)
+  useEffect(() => {
+    if (!interactive || !outer.current) return
+    return attachGlassPress(outer.current, { claimTouch })
+  }, [interactive, claimTouch, outer])
 
   const resolvedTheme = theme ?? themeFromColor(color)
 
@@ -79,11 +98,9 @@ export function Glass(props: GlassProps) {
       ref={outer}
       glass-ignore=""
       {...rest}
-      {...interaction.handlers}
       style={{
         position: "relative",
         zIndex: 1,
-        ...interaction.style,
         ...rest.style,
       }}
     >
@@ -111,7 +128,6 @@ export function Glass(props: GlassProps) {
           justifyContent: "stretch",
           alignItems: "stretch",
           borderRadius: `${borderRadius}px`,
-          ...interaction.lightStyle,
           // the clip has to follow the same corner shape as the mesh, or it would cut it back to round
           ...(corners?.shape ? ({ cornerShape: corners.shape } as React.CSSProperties) : {}),
           overflow: "hidden",
