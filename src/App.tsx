@@ -52,6 +52,30 @@ function App() {
   const [tintColor, setTintColor] = useState<string>(glassTints.blue)
   const tinted = preset === "tinted"
 
+  // The box the glass sits in is resized by its corner. It doesn't clip, so the shadow and the stretch of the glass go
+  // past its edge, which the browser's own `resize` can't do: it only works on a box that clips.
+  const [box, setBox] = useState({ width: 500, height: 500 })
+  const resizeBox = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const start = { x: e.clientX, y: e.clientY, ...box }
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) =>
+      setBox({
+        // the box is centered, so it grows by twice what the corner moves
+        width: Math.max(120, start.width + (ev.clientX - start.x) * 2),
+        height: Math.max(120, start.height + (ev.clientY - start.y) * 2),
+      })
+    const end = () => {
+      handle.removeEventListener("pointermove", move)
+      handle.removeEventListener("pointerup", end)
+      handle.removeEventListener("pointercancel", end)
+    }
+    handle.addEventListener("pointermove", move)
+    handle.addEventListener("pointerup", end)
+    handle.addEventListener("pointercancel", end)
+  }
+
   const glassColor = tinted ? tintColor : isDarkMode ? glassColors.dark : glassColors.light
 
   return (
@@ -61,12 +85,16 @@ function App() {
           {/* Demo Glass Elements */}
           <div
             glass-ignore=""
-            className="fixed inset-0 m-auto z-10 flex flex-col gap-4 w-[500px] h-[500px] border-2 p-4 text-shadow-xl"
-            style={{
-              resize: "both",
-              overflow: "hidden",
-            }}
+            className="fixed inset-0 m-auto z-10 flex flex-col gap-4 border-2 p-4 text-shadow-xl"
+            style={{ width: box.width, height: box.height }}
           >
+            <div
+              role="separator"
+              aria-label="Resize"
+              title="Resize"
+              onPointerDown={resizeBox}
+              className="absolute -bottom-1 -right-1 z-20 size-4 cursor-nwse-resize touch-none rounded-sm border-2 border-foreground/40 bg-background"
+            />
             <Glass
               className={`flex flex-col items-center justify-center flex-1 rounded-4xl ${tinted ? "text-white" : "text-foreground"}`}
               color={glassColor}
