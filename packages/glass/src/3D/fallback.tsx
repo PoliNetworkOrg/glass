@@ -11,10 +11,28 @@ export type GlassFallbackProps = {
   cornerExponent?: number
 }
 
+/**
+ * The blur, as the standard deviation of a CSS blur, of a `surface.frost`, which is the radius of the disc the 3D
+ * glass averages the backdrop over (the standard deviation of a disc is half its radius). Fitted so that the two
+ * blur the same.
+ */
+const FROST_TO_BLUR = 1.5
+
+/**
+ * # GlassFallback
+ * The glass in CSS, for where the 3D one isn't drawn: it blurs, saturates and tints what is behind it the way the
+ * 3D glass does (`surface.frost`, `tint`), but it can't bend it, which a backdrop filter has no way to do.
+ *
+ * The browser keeps its backdrop in step with the page, which is why it also stands in for the 3D glass while the
+ * page bounces. The rim, stroke and shadow around it are the same as the 3D glass has.
+ */
 export function GlassFallback(props: GlassFallbackProps) {
-  const { surface } = props.scene
+  const { surface, tint, plane } = props.scene
   const width = useTransform(() => props.bounds.get().layoutWidth)
   const height = useTransform(() => props.bounds.get().layoutHeight)
+
+  // the 3D glass sees the page blurred by the provider first, which the real page isn't
+  const blur = Math.hypot(surface.frost * FROST_TO_BLUR, plane.blur)
 
   return (
     <motion.div
@@ -25,9 +43,10 @@ export function GlassFallback(props: GlassFallbackProps) {
         borderRadius: props.borderRadius,
         zIndex: -1,
         overflow: "hidden",
-        backdropFilter: `blur(${surface.frost}px)`,
-        backgroundColor: `${props.color}CC`,
-        boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
+        backdropFilter: `blur(${blur}px) saturate(${tint.saturate})`,
+        WebkitBackdropFilter: `blur(${blur}px) saturate(${tint.saturate})`,
+        background:
+          tint.opacity > 0 ? `color-mix(in srgb, ${props.color} ${tint.opacity * 100}%, transparent)` : undefined,
       }}
     />
   )

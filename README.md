@@ -44,7 +44,9 @@ A `div` (it takes the usual props) with the glass drawn behind its children.
 | `force3D` | Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion. |
 | `disable3D` | Always use the CSS glass. |
 
-The CSS glass is used until the background is captured, while the glass is far off screen, and where the 3D one isn't
+The CSS glass has the same blur (`surface.frost` and `plane.blur`), saturation and tint as the 3D one, so the three
+presets look alike in both, but it can't bend what is behind it: a CSS backdrop filter has no displacement. It is used
+until the background is captured, while the glass is far off screen, and where the 3D one isn't
 available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the device is too slow (see
 [Performance](#performance)), or when it is turned off.
 
