@@ -1,6 +1,6 @@
 import { Plane } from "@react-three/drei"
 import { invalidate } from "@react-three/fiber"
-import { type MotionValue, useAnimationFrame, useScroll } from "motion/react"
+import { type MotionValue, useAnimationFrame, useMotionValueEvent, useScroll } from "motion/react"
 import { useCallback, useRef } from "react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Mesh, Texture } from "three"
@@ -44,8 +44,7 @@ export function BGPlane(props: PlaneMeshProps) {
     return [scrollX.get() - xoff, scrollY.get() + yoff] as [number, number]
   }, [scrollX, scrollY, props.bounds])
 
-  useAnimationFrame(() => {
-    // update in lockstep with motion's frames
+  const updatePosition = useCallback(() => {
     if (plane.current) {
       const [x, y] = getCoords()
       if (plane.current.position.x !== x || plane.current.position.y !== y) {
@@ -54,7 +53,12 @@ export function BGPlane(props: PlaneMeshProps) {
         plane.current.position.y = y
       }
     }
-  })
+  }, [getCoords])
+
+  // update in lockstep with motion's frames (for the scroll)
+  useAnimationFrame(updatePosition)
+  // and right away when the element changes, the position depends on its size too
+  useMotionValueEvent(props.bounds, "change", updatePosition)
 
   return (
     <Plane ref={plane} position={[...getCoords(), -1000]} args={[texture.width, texture.height]}>
