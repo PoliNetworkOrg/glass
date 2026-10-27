@@ -86,15 +86,9 @@ export const TintSchema = z
       .max(1)
       .default(0)
       .meta({ description: "How much of the glass color is laid over the glass. 0 is plain glass." }),
-    saturate: z
-      .number()
-      .min(0.5)
-      .max(3)
-      .default(1)
-      .meta({
-        description:
-          "Saturation of what is seen through the glass. Keeps a tint from dragging the hue of the backdrop.",
-      }),
+    saturate: z.number().min(0.5).max(3).default(1).meta({
+      description: "Saturation of what is seen through the glass. Keeps a tint from dragging the hue of the backdrop.",
+    }),
   })
   .default({ opacity: 0, saturate: 1 })
 
