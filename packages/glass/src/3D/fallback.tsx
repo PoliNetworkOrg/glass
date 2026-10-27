@@ -7,6 +7,8 @@ export type GlassFallbackProps = {
   scene: SceneConfig
   bounds: MotionValue<RectReadOnly>
   borderRadius: number
+  /** Superellipse exponent of the corners */
+  cornerExponent?: number
 }
 
 export function GlassFallback(props: GlassFallbackProps) {

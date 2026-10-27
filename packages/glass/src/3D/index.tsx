@@ -78,6 +78,7 @@ export function Glass3D(props: Glass3DProps) {
         width={width}
         height={height}
         borderRadius={props.borderRadius}
+        cornerExponent={props.cornerExponent ?? 2}
         shape={shape}
         options={material}
       />

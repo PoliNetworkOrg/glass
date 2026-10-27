@@ -11,6 +11,8 @@ export type GlassMeshProps = {
   height: MotionValue<number>
 
   borderRadius: number
+  /** Superellipse exponent of the corners, 2 is round and 4 a squircle */
+  cornerExponent: number
   /** Bevel geometry */
   shape: ShapeConfig
   /** Color of the glass material */
@@ -50,7 +52,8 @@ export function GlassMesh(props: GlassMeshProps) {
     const shape = createRoundedRect(
       Math.max(1, startingWidth - bevelSize * 2),
       Math.max(1, startingHeight - bevelSize * 2),
-      Math.max(0, props.borderRadius - bevelSize)
+      Math.max(0, props.borderRadius - bevelSize),
+      props.cornerExponent
     )
     const extrudeSettings: ExtrudeGeometryOptions = {
       steps: 1,
@@ -64,7 +67,15 @@ export function GlassMesh(props: GlassMeshProps) {
     }
     const geometry = new ExtrudeGeometry(shape.toShapes(false), extrudeSettings)
     return applyBevelProfile(geometry, props.shape.depth, props.shape.curve)
-  }, [props.borderRadius, props.shape.bezel, props.shape.depth, props.shape.curve, startingWidth, startingHeight])
+  }, [
+    props.borderRadius,
+    props.cornerExponent,
+    props.shape.bezel,
+    props.shape.depth,
+    props.shape.curve,
+    startingWidth,
+    startingHeight,
+  ])
 
   useEffect(() => () => geometry.dispose(), [geometry])
 

@@ -5,7 +5,7 @@ import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { useGlass } from "./context"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useComputedStyle, useIncreasedContrast, useMotionBounds } from "./utils/hooks"
-import { parseBorderRadius } from "./utils/style"
+import { parseBorderRadius, parseCornerExponent } from "./utils/style"
 
 export type GlassProps = {
   children: React.ReactNode
@@ -35,14 +35,21 @@ export function Glass(props: GlassProps) {
   const scene = SceneConfigSchema.parse(options)
   const { texture } = useGlass()
 
-  const [outer, br] = useComputedStyle<HTMLDivElement, number>(parseBorderRadius)
-  const borderRadius = br || 0
+  const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
+    (style) => ({
+      radius: parseBorderRadius(style),
+      exponent: parseCornerExponent(style),
+      shape: style.getPropertyValue("corner-shape"),
+    })
+  )
+  const borderRadius = corners?.radius || 0
+  const cornerExponent = corners?.exponent ?? 2
   const [ref, bounds] = useMotionBounds()
   const reducedMotion = useReducedMotion()
   const increasedContrast = useIncreasedContrast()
   const do3D = texture && ((!disable3D && !reducedMotion && !increasedContrast) || force3D)
 
-  const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius }
+  const commonProps: GlassFallbackProps = { color, scene, bounds, borderRadius, cornerExponent }
 
   return (
     <div
@@ -69,6 +76,8 @@ export function Glass(props: GlassProps) {
           justifyContent: "stretch",
           alignItems: "stretch",
           borderRadius: `${borderRadius}px`,
+          // the clip has to follow the same corner shape as the mesh, or it would cut it back to round
+          ...(corners?.shape ? ({ cornerShape: corners.shape } as React.CSSProperties) : {}),
           overflow: "hidden",
 
           zIndex: -1,

@@ -1,52 +1,50 @@
-import { ShapePath, Vector2 } from "three"
-import { det2, diag, matrix2mult } from "./math"
-
-// vertex coordinates of a unit square
-const sqrPoints = [diag(1, 1), diag(1, -1), diag(-1, -1), diag(-1, 1)] as const
-// templates for the offsets of the rounded corner start/end points
-const offsetTemplates = [
-  [new Vector2(1, 0), new Vector2(0, 1)],
-  [new Vector2(0, 1), new Vector2(1, 0)],
-]
+import { ShapePath } from "three"
 
 /**
- * Create a rounded rectangle shape path
+ * Create a rounded rectangle shape path.
+ *
+ * The corners are superellipses (`|x/r|^n + |y/r|^n = 1`): an exponent of 2 is a circular
+ * corner, 4 is a squircle. The path goes clockwise, starting on the top edge.
+ *
  * @param width Width of the rectangle (outer)
  * @param height Height of the rectangle (outer)
  * @param radius Corner radius
+ * @param exponent Superellipse exponent of the corners
+ * @param segments Number of segments used to approximate each corner
  * @returns A ShapePath representing the rounded rectangle
  */
-export function createRoundedRect(width: number, height: number, radius: number): ShapePath {
+export function createRoundedRect(
+  width: number,
+  height: number,
+  radius: number,
+  exponent: number = 2,
+  segments: number = 32
+): ShapePath {
   const path = new ShapePath()
 
   const w = width / 2 // half-width
   const h = height / 2 // half-height
   const r = Math.min(radius, w, h) // effective radius
+  const k = 2 / Math.max(exponent, 0.1)
 
-  const vertVec = new Vector2(w, h) // coordinates of the corner vertex
-  // templates with offsets for the side end and start points, at the edge of the rounded corner
-  const templs = offsetTemplates.map((t) => t.map((v) => v.clone().multiplyScalar(r)))
+  // corners in the order they are met going clockwise from the top edge, with the
+  // direction in which the arc parameter has to run to follow the path
+  const corners = [
+    { sx: 1, sy: 1, reverse: true },
+    { sx: 1, sy: -1, reverse: false },
+    { sx: -1, sy: -1, reverse: true },
+    { sx: -1, sy: 1, reverse: false },
+  ]
 
-  const vs = sqrPoints.map((m) => {
-    const concordant = det2(m) > 0 // I/III quadrants are concordant (when det of the diagonal matrix representing the point is positive)
-    const [offEnd, offNew] = templs[concordant ? 0 : 1] // offsets from template
+  const points = corners.flatMap(({ sx, sy, reverse }) =>
+    Array.from({ length: segments + 1 }, (_, i) => {
+      const t = ((reverse ? segments - i : i) / segments) * (Math.PI / 2)
+      return [sx * (w - r + r * Math.cos(t) ** k), sy * (h - r + r * Math.sin(t) ** k)] as const
+    })
+  )
 
-    return {
-      endl: matrix2mult(m, vertVec.clone().sub(offEnd)), // end of the straight edge
-      ctrl: matrix2mult(m, vertVec.clone()), // control point for the quadratic curve (corner point)
-      newl: matrix2mult(m, vertVec.clone().sub(offNew)), // start of the new straight edge
-    }
-  })
-
-  // move to the first corner start point (last edge in the array)
-  path.moveTo(vs[3].newl.x, vs[3].newl.y)
-
-  for (const vertex of vs) {
-    // line to the end of the current edge
-    path.lineTo(vertex.endl.x, vertex.endl.y)
-    // quadratic curve around the corner to the start of the new edge
-    path.quadraticCurveTo(vertex.ctrl.x, vertex.ctrl.y, vertex.newl.x, vertex.newl.y)
-  }
+  path.moveTo(...points[points.length - 1])
+  for (const p of points) path.lineTo(...p)
 
   return path
 }

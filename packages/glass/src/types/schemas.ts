@@ -72,15 +72,9 @@ export const ShapeSchema = z
       .max(64)
       .default(16)
       .meta({ description: "How far the bevel rises from the face, in px. Higher values bend the backdrop more." }),
-    curve: z
-      .number()
-      .min(0.5)
-      .max(6)
-      .default(2.5)
-      .meta({
-        description:
-          "How the bevel slopes toward the rim. Higher values keep it flat longer and bend more at the edge.",
-      }),
+    curve: z.number().min(0.5).max(6).default(2.5).meta({
+      description: "How the bevel slopes toward the rim. Higher values keep it flat longer and bend more at the edge.",
+    }),
   })
   .default({ bezel: 16, depth: 16, curve: 2.5 })
 

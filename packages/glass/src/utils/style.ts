@@ -21,3 +21,19 @@ export function parseBorderRadius(style: CSSStyleDeclaration): number {
   const px = raw.endsWith("%") ? (Math.min(w, h) * value) / 100 : value
   return Math.max(0, half > 0 ? Math.min(px, half) : px)
 }
+
+/**
+ * Resolves the superellipse exponent of the corners from a computed `corner-shape`.
+ *
+ * `round` is a circular corner (exponent 2), `squircle` is 4, and `superellipse(K)` is `2 ** K`.
+ * Anything else, or a browser without `corner-shape`, gives a circular corner.
+ *
+ * @param style The computed style of the element
+ * @returns The superellipse exponent of the corners
+ */
+export function parseCornerExponent(style: CSSStyleDeclaration): number {
+  const shape = style.getPropertyValue("corner-top-left-shape") || style.getPropertyValue("corner-shape")
+  if (shape.startsWith("squircle")) return 4
+  const match = /superellipse\(\s*(-?[\d.]+)/.exec(shape)
+  return match ? Math.max(1, 2 ** Number.parseFloat(match[1])) : 2
+}
