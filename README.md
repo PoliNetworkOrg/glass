@@ -105,6 +105,10 @@ of the rim and no `ior` or `thickness` made it follow this profile.
 - **Device check.** The first time glass is used the device is measured when the browser is idle (a WebGL2 context that
   refuses software renderers, then a few frames of a workload shaped like the glass), and the verdict is kept in
   `localStorage`. Until it is known, and where it is a no, the CSS glass is used. `force3D` skips it.
+- **Follows the element.** While a glass is drawn it reads where its element is on every frame (one shared loop, a
+  single batched read for all the glass) and redraws only when that changed. So whatever moves it without a scroll,
+  its own press and stretch, a CSS transition or animation, a layout shift, the glass keeps the page lined up behind
+  it. The scroll position is read from the window each frame too, not only from scroll events.
 - **Opt out.** `<GlassProvider enabled={false}>` for everything, or `data-glass-off` on any ancestor of a glass for a
   region of the page (read when the glass comes into view).
 

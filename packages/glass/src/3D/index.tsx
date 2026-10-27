@@ -13,26 +13,35 @@ export type Glass3DProps = GlassFallbackProps & {
 const MotCanv = motion.create(Canvas)
 
 /**
- * Keeps the size of the canvas in step with the element as it changes.
+ * Keeps the canvas and the view in step with the element as it changes.
  *
- * The canvas follows the element on its own, but only after it has measured it, a few
- * frames later, and until then it shows a cropped view of a glass that is already resized.
- * This sets the size in the same event that resizes the glass and renders that frame right away,
- * since resizing a canvas clears it.
+ * The canvas is the size of the box of the element and is drawn on screen by the element's transform (a press scales
+ * it), so what it shows is lined up with the page by a view as big as the element is drawn, which makes a unit of
+ * the scene a pixel of the screen. R3F would size the view like the canvas, so it is told not to (`manual`) and this
+ * sets it.
  *
- * It has to come after everything else that listens to the bounds, so they are up to date.
+ * It sets the size in the same event that moves the glass and renders that frame right away, since resizing a
+ * canvas clears it, and it has to come after everything else that listens to the bounds, so they are up to date.
  */
 function SyncSize({ bounds }: { bounds: Glass3DProps["bounds"] }) {
   const get = useThree((state) => state.get)
-  const last = useRef({ width: 0, height: 0 })
+  const last = useRef({ width: 0, height: 0, layoutWidth: 0, layoutHeight: 0 })
 
   useMotionValueEvent(bounds, "change", () => {
-    const { width, height } = bounds.get()
-    if (width <= 0 || height <= 0) return
-    if (width === last.current.width && height === last.current.height) return
-    last.current = { width, height }
+    const { width, height, layoutWidth, layoutHeight } = bounds.get()
+    if (width <= 0 || height <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return
+    const l = last.current
+    if (width === l.width && height === l.height && layoutWidth === l.layoutWidth && layoutHeight === l.layoutHeight)
+      return
+    last.current = { width, height, layoutWidth, layoutHeight }
     const state = get()
-    state.setSize(width, height, state.size.top, state.size.left)
+    const camera = state.camera as OrthographicCamera
+    camera.left = -width / 2
+    camera.right = width / 2
+    camera.top = height / 2
+    camera.bottom = -height / 2
+    camera.updateProjectionMatrix()
+    state.setSize(layoutWidth, layoutHeight, state.size.top, state.size.left)
     advance(performance.now(), false, get())
     // everything that changed has been drawn, so the frames the listeners asked for are redundant
     get().internal.frames = 0
@@ -52,6 +61,8 @@ export function Glass3D(props: Glass3DProps) {
     const { width: w, height: h } = props.bounds.get()
     const camera = new OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.01, 2048)
     camera.position.set(0, 0, 512)
+    // the view is set by SyncSize and not by the size of the canvas
+    camera.manual = true
     return camera
   }, [props.bounds])
 
@@ -63,6 +74,7 @@ export function Glass3D(props: Glass3DProps) {
       dpr={1}
       camera={camera}
       frameloop="demand"
+      resize={{ offsetSize: true }}
       style={{
         width: "100%",
         height: "100%",

@@ -1,13 +1,13 @@
 import { invalidate } from "@react-three/fiber"
 import { type MotionValue, useMotionValueEvent } from "motion/react"
 import { useLayoutEffect, useMemo, useRef } from "react"
-import type { RectReadOnly } from "react-use-measure"
 import { type Mesh, ShaderMaterial, type Texture, Vector2 } from "three"
 import type { ShapeConfig } from "../types/schemas"
+import type { GlassBounds } from "../utils/hooks"
 
 export type GlassDisplacementProps = {
   /** The bounds of the element, updated outside of react */
-  bounds: MotionValue<RectReadOnly>
+  bounds: MotionValue<GlassBounds>
   borderRadius: number
   /** Superellipse exponent of the corners, 2 is round and 4 a squircle */
   cornerExponent: number
@@ -144,15 +144,17 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
   )
 
   const sync = () => {
-    const { width: w, height: h } = bounds.get()
-    if (w <= 0 || h <= 0) return
+    const { width: w, height: h, layoutWidth, layoutHeight } = bounds.get()
+    if (w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return
+    // the element can be drawn bigger or smaller than its box (a press, a stretch), and its corners with it
+    const drawn = (w / layoutWidth + h / layoutHeight) / 2
     const half = Math.min(w, h) / 2
     const u = material.uniforms
     u.uMap.value = texture
     const image = texture.image as { width: number; height: number }
     u.uTexSize.value.set(image.width, image.height)
     u.uSize.value.set(w, h)
-    u.uRadius.value = Math.max(0, Math.min(borderRadius, w / 2, h / 2))
+    u.uRadius.value = Math.max(0, Math.min(borderRadius * drawn, w / 2, h / 2))
     u.uExp.value = cornerExponent
     // the profile was measured on small controls, where 25px of shift is a lot: a bigger surface bends over a wider
     // band and further, as real glass does, so both grow with the shortest side past the size they were fitted at

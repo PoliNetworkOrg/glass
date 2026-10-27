@@ -91,23 +91,83 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
   return texture
 }
 
+type Watcher = () => (() => void) | undefined
+
+const watchers = new Set<Watcher>()
+let frame = 0
+
+function tick() {
+  frame = requestAnimationFrame(tick)
+  // everything is read before anything is written, so a glass that redraws doesn't force a layout for the next one
+  const commits: (() => void)[] = []
+  for (const read of watchers) {
+    const commit = read()
+    if (commit) commits.push(commit)
+  }
+  for (const commit of commits) commit()
+}
+
+/**
+ * Calls `read` on every frame, and the function it returns, if it does, after all the other watchers have read.
+ * All of them share one animation frame loop, which only runs while there is one.
+ */
+function watchFrames(read: Watcher) {
+  watchers.add(read)
+  if (!frame) frame = requestAnimationFrame(tick)
+  return () => {
+    watchers.delete(read)
+    if (watchers.size === 0) {
+      cancelAnimationFrame(frame)
+      frame = 0
+    }
+  }
+}
+
+/**
+ * The rectangle of an element as it is drawn (transforms included), and the size of its box before them: the
+ * canvas of a glass has the second and draws the first.
+ */
+export type GlassBounds = RectReadOnly & { layoutWidth: number; layoutHeight: number }
+
+const boundsOf = (el: HTMLElement, rect: DOMRect): GlassBounds => ({
+  x: rect.x,
+  y: rect.y,
+  width: rect.width,
+  height: rect.height,
+  top: rect.top,
+  right: rect.right,
+  bottom: rect.bottom,
+  left: rect.left,
+  layoutWidth: el.offsetWidth,
+  layoutHeight: el.offsetHeight,
+})
+
+const sameRect = (a: RectReadOnly, b: DOMRect) =>
+  Math.abs(a.x - b.x) < 0.01 &&
+  Math.abs(a.y - b.y) < 0.01 &&
+  Math.abs(a.width - b.width) < 0.01 &&
+  Math.abs(a.height - b.height) < 0.01
+
 /**
  * # useMotionBounds
  * Custom hook to track the bounding rectangle of a DOM element using motion values.
  *
  * Having the bounds as motion values allows for smooth animations without constant re-renders.
  *
- * It accounts for visual viewport offsets and updates on resize and scroll events.
+ * It accounts for visual viewport offsets and updates on resize and scroll events. The rectangle is where the
+ * element is drawn, transforms included, and a transform (a press, a transition, an animation) fires none of those
+ * events, so while `watch` is true the rectangle is also read on every frame, and only changes when it moved.
  * @see https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport
  *
  * _The DOM is the biggest threat to performance yet again_
  *
+ * @param watch Read the rectangle on every frame. Costs a read of it per frame, so only for what is being drawn.
  * @return A tuple containing:
  *   - A ref to be attached to the target DOM element.
  *   - A MotionValue representing the bounding rectangle of the element.
  */
-export function useMotionBounds() {
-  const motionValues = useMotionValue<RectReadOnly>({
+export function useMotionBounds(watch = false) {
+  const motionValues = useMotionValue<GlassBounds>({
     x: 0,
     y: 0,
     width: 0,
@@ -116,27 +176,15 @@ export function useMotionBounds() {
     right: 0,
     bottom: 0,
     left: 0,
+    layoutWidth: 0,
+    layoutHeight: 0,
   })
   const ref = useRef<HTMLDivElement | null>(null)
-
-  // // the offsets in size for the visual viewport, or safari stutters like crazy
-  // // thanks, apple
-  // const vpOffsets = useMotionValue({ w: 0, h: 0 })
-  // useAnimationFrame(() => {
-  //   if (window.visualViewport) {
-  //     vpOffsets.set({
-  //       w: window.visualViewport.width - window.innerWidth,
-  //       h: window.visualViewport.height - window.innerHeight,
-  //     })
-  //   }
-  // })
 
   useEffect(() => {
     const updatePosition = () => {
       if (ref.current) {
-        const rect = ref.current.getBoundingClientRect()
-        const { x, y, width, height, top, right, bottom, left } = rect
-        motionValues.set({ x, y, width, height, top, right, bottom, left })
+        motionValues.set(boundsOf(ref.current, ref.current.getBoundingClientRect()))
       }
     }
 
@@ -160,20 +208,16 @@ export function useMotionBounds() {
     }
   }, [ref.current])
 
-  // const bounds = useTransform(() => {
-  //   const offsets = vpOffsets.get()
-  //   const rect = motionValues.get()
-  //   return {
-  //     x: rect.x + offsets.w / 2,
-  //     y: rect.y + offsets.h / 2,
-  //     width: rect.width,
-  //     height: rect.height,
-  //     top: rect.top + offsets.h / 2,
-  //     right: rect.right + offsets.w / 2,
-  //     bottom: rect.bottom + offsets.h / 2,
-  //     left: rect.left + offsets.w / 2,
-  //   }
-  // })
+  useEffect(() => {
+    if (!watch) return
+    return watchFrames(() => {
+      const el = ref.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      if (sameRect(motionValues.get(), rect)) return
+      return () => motionValues.set(boundsOf(el, rect))
+    })
+  }, [watch, motionValues])
 
   return [ref, motionValues] as const
 }

@@ -70,7 +70,6 @@ export function Glass(props: GlassProps) {
   )
   const borderRadius = corners?.radius || 0
   const cornerExponent = corners?.exponent ?? 2
-  const [ref, bounds] = useMotionBounds()
   const reducedMotion = useReducedMotion()
   const increasedContrast = useIncreasedContrast()
   const inView = useInView(outer)
@@ -83,6 +82,9 @@ export function Glass(props: GlassProps) {
     texture &&
     inView &&
     ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
+
+  // while it is drawn the glass follows its element on every frame, as a press or an animation moves it without a scroll
+  const [ref, bounds] = useMotionBounds(Boolean(do3D))
 
   useEffect(() => {
     if (!interactive || !outer.current) return

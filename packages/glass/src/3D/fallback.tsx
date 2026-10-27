@@ -1,11 +1,11 @@
 import { type MotionValue, motion, useTransform } from "motion/react"
-import type { RectReadOnly } from "react-use-measure"
 import type { SceneConfig } from "../types/schemas"
+import type { GlassBounds } from "../utils/hooks"
 
 export type GlassFallbackProps = {
   color: string
   scene: SceneConfig
-  bounds: MotionValue<RectReadOnly>
+  bounds: MotionValue<GlassBounds>
   borderRadius: number
   /** Superellipse exponent of the corners */
   cornerExponent?: number
@@ -13,8 +13,8 @@ export type GlassFallbackProps = {
 
 export function GlassFallback(props: GlassFallbackProps) {
   const { surface } = props.scene
-  const width = useTransform(() => props.bounds.get().width)
-  const height = useTransform(() => props.bounds.get().height)
+  const width = useTransform(() => props.bounds.get().layoutWidth)
+  const height = useTransform(() => props.bounds.get().layoutHeight)
 
   return (
     <motion.div

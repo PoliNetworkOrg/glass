@@ -1,15 +1,15 @@
 import { invalidate } from "@react-three/fiber"
-import { type MotionValue, useAnimationFrame, useMotionValueEvent, useScroll } from "motion/react"
+import { type MotionValue, useAnimationFrame, useMotionValueEvent } from "motion/react"
 import { useCallback, useRef } from "react"
-import type { RectReadOnly } from "react-use-measure"
 import type { Mesh, Texture } from "three"
 import type { PlaneConfig } from "../types/schemas"
+import type { GlassBounds } from "../utils/hooks"
 
 export type PlaneMeshProps = {
   /** The texture containing a screenshot of the document */
   texture: Texture
   /** The motion value containing the bounds of the element, updated outside of react */
-  bounds: MotionValue<RectReadOnly>
+  bounds: MotionValue<GlassBounds>
 
   options: PlaneConfig
 }
@@ -25,8 +25,6 @@ export type PlaneMeshProps = {
  */
 export function BGPlane(props: PlaneMeshProps) {
   const plane = useRef<Mesh>(null)
-  // Get scroll positions from motion's useScroll
-  const { scrollX, scrollY } = useScroll()
   const { texture } = props
   // const texture = useTexture(props.texture)
 
@@ -40,8 +38,10 @@ export function BGPlane(props: PlaneMeshProps) {
     // but the state changes themselves are more expensive than recalculating here
     const xoff = left + width / 2 - docw / 2
     const yoff = top + height / 2 - doch / 2
-    return [scrollX.get() - xoff, scrollY.get() + yoff] as [number, number]
-  }, [scrollX, scrollY, props.bounds])
+    // read from the window and not from scroll events: where the page is pulled past its end (an overscroll) the
+    // position can change without one
+    return [window.scrollX - xoff, window.scrollY + yoff] as [number, number]
+  }, [props.bounds])
 
   const updatePosition = useCallback(() => {
     if (plane.current) {
