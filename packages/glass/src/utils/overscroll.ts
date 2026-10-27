@@ -39,21 +39,42 @@ function canScroll(target: EventTarget | null, dx: number, dy: number) {
   for (let n = target instanceof Element ? target : null; n && n !== root && n !== document.body; n = n.parentElement) {
     const style = getComputedStyle(n)
     if (dy && /auto|scroll/.test(style.overflowY) && n.scrollHeight > n.clientHeight) {
-      if (dy < 0 ? n.scrollTop > 0 : n.scrollTop + n.clientHeight < n.scrollHeight - 1) return true
+      if (dy < 0 ? n.scrollTop > AT_END : n.scrollTop + n.clientHeight < n.scrollHeight - AT_END) return true
     }
     if (dx && /auto|scroll/.test(style.overflowX) && n.scrollWidth > n.clientWidth) {
-      if (dx < 0 ? n.scrollLeft > 0 : n.scrollLeft + n.clientWidth < n.scrollWidth - 1) return true
+      if (dx < 0 ? n.scrollLeft > AT_END : n.scrollLeft + n.clientWidth < n.scrollWidth - AT_END) return true
     }
   }
   return false
 }
 
+/**
+ * How far the page scrolls. Firefox says it (`scrollTopMax`), elsewhere it is the size of the content less the size
+ * of the box, both rounded to whole pixels, so it can be a pixel off from where the scrolling really ends.
+ */
+const maxScroll = (el: Element) => {
+  const { scrollTopMax, scrollLeftMax } = el as Element & { scrollTopMax?: number; scrollLeftMax?: number }
+  return {
+    x: Math.max(0, scrollLeftMax ?? el.scrollWidth - el.clientWidth),
+    y: Math.max(0, scrollTopMax ?? el.scrollHeight - el.clientHeight),
+  }
+}
+
+/** A position this far past an end is the page being bounced where it can see it, and not rounding */
+const REPORTED = 8
+/** How close to an end is at it, which is more than rounding is off by */
+const AT_END = 1.5
+
 /** The position of the page goes past its end, which is how a browser that lets the page see the bounce does it */
-const reportsOverscroll = (el: Element) =>
-  el.scrollTop < -0.5 ||
-  el.scrollTop > el.scrollHeight - el.clientHeight + 0.5 ||
-  el.scrollLeft < -0.5 ||
-  el.scrollLeft > el.scrollWidth - el.clientWidth + 0.5
+const reportsOverscroll = (el: Element) => {
+  const max = maxScroll(el)
+  return (
+    el.scrollTop < -REPORTED ||
+    el.scrollTop > max.y + REPORTED ||
+    el.scrollLeft < -REPORTED ||
+    el.scrollLeft > max.x + REPORTED
+  )
+}
 
 /**
  * The input at (dx, dy) is pushing the page past one of its four ends.
@@ -71,11 +92,11 @@ function pushesPastEnd(target: EventTarget | null, dx: number, dy: number) {
     set(false)
     return false
   }
-  const wide = el.scrollWidth > el.clientWidth
-  const atTop = el.scrollTop <= 0
-  const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 0.5
-  const atLeft = wide && el.scrollLeft <= 0
-  const atRight = wide && el.scrollLeft >= el.scrollWidth - el.clientWidth - 0.5
+  const max = maxScroll(el)
+  const atTop = el.scrollTop <= AT_END
+  const atBottom = el.scrollTop >= max.y - AT_END
+  const atLeft = max.x > 0 && el.scrollLeft <= AT_END
+  const atRight = max.x > 0 && el.scrollLeft >= max.x - AT_END
   const out = (dy < 0 && atTop) || (dy > 0 && atBottom) || (dx < 0 && atLeft) || (dx > 0 && atRight)
   return out && !canScroll(target, dx, dy)
 }
