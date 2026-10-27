@@ -48,20 +48,34 @@ function canScroll(target: EventTarget | null, dx: number, dy: number) {
   return false
 }
 
-/** The input at (dx, dy) is pushing the page past its end */
+/** The position of the page goes past its end, which is how a browser that lets the page see the bounce does it */
+const reportsOverscroll = (el: Element) =>
+  el.scrollTop < -0.5 ||
+  el.scrollTop > el.scrollHeight - el.clientHeight + 0.5 ||
+  el.scrollLeft < -0.5 ||
+  el.scrollLeft > el.scrollWidth - el.clientWidth + 0.5
+
+/**
+ * The input at (dx, dy) is pushing the page past one of its four ends.
+ *
+ * Sideways the page has to have something to scroll, a page that fits its width doesn't bounce that way (the
+ * gesture goes to the browser's history instead). Up and down it is counted either way, since some browsers
+ * bounce a page that fits too.
+ */
 function pushesPastEnd(target: EventTarget | null, dx: number, dy: number) {
   const el = document.scrollingElement
   if (!el) return false
-  if (el.scrollTop < -0.5 || el.scrollTop > el.scrollHeight - el.clientHeight + 0.5) {
-    // the position goes past the end: the glass can follow it by itself
+  if (reportsOverscroll(el)) {
+    // the glass can follow it by itself
     exposed = true
     set(false)
     return false
   }
+  const wide = el.scrollWidth > el.clientWidth
   const atTop = el.scrollTop <= 0
   const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 0.5
-  const atLeft = el.scrollLeft <= 0
-  const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 0.5
+  const atLeft = wide && el.scrollLeft <= 0
+  const atRight = wide && el.scrollLeft >= el.scrollWidth - el.clientWidth - 0.5
   const out = (dy < 0 && atTop) || (dy > 0 && atBottom) || (dx < 0 && atLeft) || (dx > 0 && atRight)
   return out && !canScroll(target, dx, dy)
 }
@@ -90,7 +104,7 @@ const onTouchMove = (e: TouchEvent) => {
 }
 const onScroll = () => {
   const el = document.scrollingElement
-  if (el && (el.scrollTop < -0.5 || el.scrollTop > el.scrollHeight - el.clientHeight + 0.5)) {
+  if (el && reportsOverscroll(el)) {
     exposed = true
     set(false)
   }
