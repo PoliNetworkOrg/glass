@@ -8,6 +8,8 @@ import { BGPlane } from "./plane"
 
 export type Glass3DProps = GlassFallbackProps & {
   texture: Texture
+  /** Fade the canvas out, for while the CSS glass stands in for it */
+  hidden?: boolean
 }
 
 const MotCanv = motion.create(Canvas)
@@ -82,6 +84,8 @@ export function Glass3D(props: Glass3DProps) {
         borderRadius: 5,
         zIndex: -1,
         overflow: "hidden",
+        opacity: props.hidden ? 0 : 1,
+        transition: "opacity 0.15s ease",
         filter: tint.saturate !== 1 ? `saturate(${tint.saturate})` : undefined,
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}

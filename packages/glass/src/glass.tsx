@@ -6,6 +6,7 @@ import { GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useGlassCapability } from "./utils/capability"
+import { useFade, useOverscroll } from "./utils/overscroll"
 import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
 import { attachGlassPress } from "./utils/press"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
@@ -83,6 +84,10 @@ export function Glass(props: GlassProps) {
     inView &&
     ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
 
+  // where the page bounces past its end the canvas can't follow it, and the CSS glass can: see utils/overscroll.ts
+  const bouncing = useOverscroll(Boolean(do3D))
+  const fade = useFade(bouncing, 150)
+
   // while it is drawn the glass follows its element on every frame, as a press or an animation moves it without a scroll
   const [ref, bounds] = useMotionBounds(Boolean(do3D))
 
@@ -142,7 +147,7 @@ export function Glass(props: GlassProps) {
         {do3D ? (
           <>
             <Suspense fallback={<GlassFallback {...commonProps} />}>
-              <Glass3D {...commonProps} texture={texture} />
+              <Glass3D {...commonProps} texture={texture} hidden={fade.visible} />
             </Suspense>
             {scene.tint.opacity > 0 && (
               <div
@@ -152,8 +157,25 @@ export function Glass(props: GlassProps) {
                   inset: 0,
                   pointerEvents: "none",
                   background: `color-mix(in srgb, ${color} ${scene.tint.opacity * 100}%, transparent)`,
+                  opacity: fade.visible ? 0 : 1,
+                  transition: "opacity 0.15s ease",
                 }}
               />
+            )}
+            {fade.mounted && (
+              <div
+                className="_polinetwork_glass-bounce"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  pointerEvents: "none",
+                  opacity: fade.visible ? 1 : 0,
+                  transition: "opacity 0.15s ease",
+                }}
+              >
+                <GlassFallback {...commonProps} />
+              </div>
             )}
           </>
         ) : (
