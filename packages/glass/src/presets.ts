@@ -9,6 +9,21 @@ export type GlassPreset = {
   edge?: Partial<EdgeConfig>
 }
 
+/**
+ * Colors to give a `tinted` glass as its `color`: the system colors of Apple's interfaces, with `blue` the one to
+ * start from.
+ */
+export const glassTints = Object.freeze({
+  blue: "#007aff",
+  teal: "#30b0c7",
+  green: "#34c759",
+  yellow: "#ffcc00",
+  orange: "#ff9500",
+  red: "#ff3b30",
+  pink: "#ff2d55",
+  purple: "#af52de",
+} as const)
+
 export type GlassPresetName = "regular" | "clear" | "tinted"
 
 /**
@@ -17,7 +32,7 @@ export type GlassPresetName = "regular" | "clear" | "tinted"
  * - `regular` the one that comes by default: a light frost under a strong tint of the glass color (neutral for
  *   a neutral color), as measured on Apple's tab bar
  * - `clear` half the tint and frost, and the colors of what is behind it pushed up, to get out of the way of it
- * - `tinted` colored glass, whose color is the one given to the glass
+ * - `tinted` colored glass, whose color is the one given to the glass (see {@link glassTints}, `blue` is a good one)
  *
  * They are plain options: use one as is, or through {@link withPreset} to change some of it.
  *

@@ -5,7 +5,7 @@ Liquid glass for the web: the page behind an element is captured as a texture an
 displacement profile fitted to Apple's Liquid Glass (WebGL, with Three.js), with a CSS version where that can't be used.
 
 ```tsx
-import { Glass, GlassProvider, glassPresets } from "@polinetwork/glass"
+import { Glass, GlassProvider, glassPresets, glassTints } from "@polinetwork/glass"
 
 <GlassProvider deps={[theme]} blur={2}>
   <Glass color="#F8FAFC" options={glassPresets.regular} className="rounded-3xl p-6">
@@ -54,6 +54,7 @@ available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the d
 
 ```tsx
 <Glass options={glassPresets.clear} color="#F8FAFC" />
+<Glass options={glassPresets.tinted} color={glassTints.blue} />
 <Glass options={withPreset("tinted", { tint: { opacity: 0.5 } })} color="#3b6175" />
 ```
 
@@ -61,7 +62,7 @@ available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the d
 | --- | --- |
 | `regular` | The default: a light frost (2px) under a strong tint (66%) of the glass color, as measured on Apple's tab bar. |
 | `clear` | Half the frost and tint, the colors behind pushed up (saturation 1.8), to get out of the way of what is behind it. |
-| `tinted` | Colored glass: its color is the `color` of the glass. |
+| `tinted` | Colored glass: its color is the `color` of the glass. `glassTints` has ready made ones (`blue`, `teal`, `green`, `yellow`, `orange`, `red`, `pink`, `purple`), `blue` being the one to start from. |
 
 ## Configuration
 

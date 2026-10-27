@@ -1,4 +1,11 @@
-import { Glass, GlassProvider, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
+import {
+  Glass,
+  type GlassPresetName,
+  GlassProvider,
+  glassTints,
+  type SceneConfig,
+  SceneConfigSchema,
+} from "@polinetwork/glass"
 import { useState } from "react"
 import "./App.css"
 import { Button } from "@/components/ui/button"
@@ -40,7 +47,11 @@ function App() {
   const [glassOptions, setGlassOptions] = useState<SceneConfig>(SceneConfigSchema.parse(defaultConfig))
   const [isDarkMode, setIsDarkMode] = useState(false)
 
-  const glassColor = isDarkMode ? "#3b6175" : "#F8FAFC"
+  const [preset, setPreset] = useState<GlassPresetName>("regular")
+  const [tintColor, setTintColor] = useState<string>(glassTints.blue)
+  const tinted = preset === "tinted"
+
+  const glassColor = tinted ? tintColor : isDarkMode ? "#3b6175" : "#F8FAFC"
 
   return (
     <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur}>
@@ -56,29 +67,38 @@ function App() {
             }}
           >
             <Glass
-              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl"
+              className={`flex flex-col items-center justify-center flex-1 rounded-4xl ${tinted ? "text-white" : "text-foreground"}`}
               color={glassColor}
               options={glassOptions}
               force3D
               interactive
             >
               <h2 className="text-2xl font-bold">Real Glass</h2>
-              <span className="text-sm text-muted-foreground">Rendered with WebGL</span>
+              <span className={`text-sm ${tinted ? "text-white/80" : "text-muted-foreground"}`}>
+                Rendered with WebGL
+              </span>
             </Glass>
             <Glass
-              className="flex flex-col items-center justify-center flex-1 text-foreground rounded-4xl"
+              className={`flex flex-col items-center justify-center flex-1 rounded-4xl ${tinted ? "text-white" : "text-foreground"}`}
               color={glassColor}
               options={glassOptions}
               disable3D
             >
               <h2 className="text-2xl font-bold">Fallback Glass</h2>
-              <span className="text-sm text-muted-foreground">Pure CSS</span>
+              <span className={`text-sm ${tinted ? "text-white/80" : "text-muted-foreground"}`}>Pure CSS</span>
               <code className="text-xs mt-2">frost: {glassOptions.surface.frost}px</code>
             </Glass>
           </div>
 
           {/* Options Panel */}
-          <DemoOptions onChange={setGlassOptions} onDarkModeChange={setIsDarkMode} isDarkMode={isDarkMode} />
+          <DemoOptions
+            onChange={setGlassOptions}
+            onDarkModeChange={setIsDarkMode}
+            isDarkMode={isDarkMode}
+            onPresetChange={setPreset}
+            tintColor={tintColor}
+            onTintColorChange={setTintColor}
+          />
 
           {/* Content */}
           <div className="min-h-[200vh] max-w-4xl mx-auto px-4 py-36 space-y-16">

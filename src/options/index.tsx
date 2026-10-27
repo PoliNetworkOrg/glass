@@ -1,4 +1,4 @@
-import { type GlassPresetName, glassPresets, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
+import { type GlassPresetName, glassPresets, glassTints, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
 import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,10 @@ export function DemoOptions(props: {
   onChange?: (options: SceneConfig) => void
   onDarkModeChange?: (isDark: boolean) => void
   isDarkMode?: boolean
+  onPresetChange?: (preset: GlassPresetName) => void
+  /** The color of the tinted preset */
+  tintColor?: string
+  onTintColorChange?: (color: string) => void
 }) {
   const defaultConfig = getDefaultValues(SceneConfigSchema)
   const [config, setConfig] = useState<SceneConfig>(defaultConfig)
@@ -30,6 +34,7 @@ export function DemoOptions(props: {
   const handlePreset = (name: GlassPresetName) => {
     const p = glassPresets[name]
     setPreset(name)
+    props.onPresetChange?.(name)
     setConfig((c) => ({
       plane: { ...c.plane, ...p.plane },
       shape: { ...c.shape, ...p.shape },
@@ -84,6 +89,36 @@ export function DemoOptions(props: {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Color of the tinted preset */}
+            {preset === "tinted" && (
+              <div className="space-y-2">
+                <Label>Tint color</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {Object.entries(glassTints).map(([name, color]) => (
+                    <button
+                      key={name}
+                      type="button"
+                      title={name}
+                      aria-label={name}
+                      onClick={() => props.onTintColorChange?.(color)}
+                      className="size-6 rounded-full border-2 border-background ring-offset-1 ring-offset-background"
+                      style={{
+                        backgroundColor: color,
+                        boxShadow: props.tintColor === color ? `0 0 0 2px ${color}` : "0 0 0 1px rgba(0,0,0,0.2)",
+                      }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom tint color"
+                    value={props.tintColor}
+                    onChange={(e) => props.onTintColorChange?.(e.target.value)}
+                    className="size-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Schema-generated form */}
             <SchemaForm schema={SceneConfigSchema} value={config} onChange={setConfig} />
