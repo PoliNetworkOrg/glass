@@ -46,7 +46,7 @@ function SyncSize({ bounds }: { bounds: Glass3DProps["bounds"] }) {
 
 export function Glass3D(props: Glass3DProps) {
   // const [isSuspended, setIsSuspended] = useState(true)
-  const { lighting, material, plane, shape } = props.scene
+  const { lighting, material, plane, shape, tint } = props.scene
   // const gpu = useDetectGPU({
   //   failIfMajorPerformanceCaveat: true,
   // })
@@ -78,6 +78,7 @@ export function Glass3D(props: Glass3DProps) {
         borderRadius: 5,
         zIndex: -1,
         overflow: "hidden",
+        filter: tint.saturate !== 1 ? `saturate(${tint.saturate})` : undefined,
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >

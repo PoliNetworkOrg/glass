@@ -78,6 +78,26 @@ export const ShapeSchema = z
   })
   .default({ bezel: 16, depth: 16, curve: 2.5 })
 
+export const TintSchema = z
+  .object({
+    opacity: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0)
+      .meta({ description: "How much of the glass color is laid over the glass. 0 is plain glass." }),
+    saturate: z
+      .number()
+      .min(0.5)
+      .max(3)
+      .default(1)
+      .meta({
+        description:
+          "Saturation of what is seen through the glass. Keeps a tint from dragging the hue of the backdrop.",
+      }),
+  })
+  .default({ opacity: 0, saturate: 1 })
+
 export const LightingSchema = z
   .object({
     ambient: z.object({
@@ -124,6 +144,7 @@ export const SceneConfigSchema = z.object({
   material: z.any().default({}),
   plane: PlaneSchema,
   shape: ShapeSchema,
+  tint: TintSchema,
   lighting: LightingSchema,
 })
 
@@ -132,4 +153,5 @@ export type SceneConfig = z.infer<typeof SceneConfigSchema> & {
   material: GlassConfig
 }
 export type ShapeConfig = z.infer<typeof ShapeSchema>
+export type TintConfig = z.infer<typeof TintSchema>
 export type PlaneConfig = z.infer<typeof PlaneSchema>

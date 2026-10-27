@@ -84,9 +84,22 @@ export function Glass(props: GlassProps) {
         }}
       >
         {do3D ? (
-          <Suspense fallback={<GlassFallback {...commonProps} />}>
-            <Glass3D {...commonProps} texture={texture} />
-          </Suspense>
+          <>
+            <Suspense fallback={<GlassFallback {...commonProps} />}>
+              <Glass3D {...commonProps} texture={texture} />
+            </Suspense>
+            {scene.tint.opacity > 0 && (
+              <div
+                className="_polinetwork_glass-tint"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  pointerEvents: "none",
+                  background: `color-mix(in srgb, ${color} ${scene.tint.opacity * 100}%, transparent)`,
+                }}
+              />
+            )}
+          </>
         ) : (
           <GlassFallback {...commonProps} />
         )}
