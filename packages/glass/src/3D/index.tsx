@@ -1,4 +1,4 @@
-import { AdaptiveDpr, AdaptiveEvents, Preload, Stats } from "@react-three/drei"
+import { AdaptiveDpr, AdaptiveEvents, Preload } from "@react-three/drei"
 import { advance, Canvas, useThree } from "@react-three/fiber"
 import { motion, useMotionValueEvent } from "motion/react"
 import { useMemo, useRef } from "react"
@@ -82,7 +82,6 @@ export function Glass3D(props: Glass3DProps) {
         boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
       }}
     >
-      <Stats showPanel={1} />
       <AdaptiveDpr />
       <AdaptiveEvents />
       <SceneLights settings={lighting} />

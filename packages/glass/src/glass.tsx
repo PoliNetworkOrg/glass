@@ -5,7 +5,7 @@ import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
-import { useComputedStyle, useIncreasedContrast, useMotionBounds } from "./utils/hooks"
+import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
 import { parseBorderRadius, parseCornerExponent } from "./utils/style"
 import { themeFromColor } from "./utils/theme"
 
@@ -52,7 +52,8 @@ export function Glass(props: GlassProps) {
   const [ref, bounds] = useMotionBounds()
   const reducedMotion = useReducedMotion()
   const increasedContrast = useIncreasedContrast()
-  const do3D = texture && ((!disable3D && !reducedMotion && !increasedContrast) || force3D)
+  const inView = useInView(outer)
+  const do3D = texture && inView && ((!disable3D && !reducedMotion && !increasedContrast) || force3D)
 
   const resolvedTheme = theme ?? themeFromColor(color)
 

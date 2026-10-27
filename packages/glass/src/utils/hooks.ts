@@ -1,5 +1,5 @@
 import { useMotionValue } from "motion/react"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Texture } from "three"
 import { getTexture } from "./texture"
@@ -236,4 +236,40 @@ export function useFailCondition(check: () => boolean) {
   } else {
     suspenderRef.current = null
   }
+}
+
+/**
+ * # useInView
+ * Tells whether an element is on the screen, or about to be.
+ *
+ * Each 3D glass is a WebGL context and a render loop, so glass that is far off screen
+ * shouldn't have one. It starts as not in view, so nothing is built before it is seen.
+ *
+ * @param ref The element to watch
+ * @param rootMargin How far past the screen counts as in view, to be ready before a scroll gets there
+ * @returns true while the element is within the margin of the screen
+ */
+export function useInView(ref: RefObject<Element | null>, rootMargin = "200px") {
+  const [inView, setInView] = useState(false)
+
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    if (typeof IntersectionObserver === "undefined") {
+      setInView(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // the last entry is where the element stands now
+        const entry = entries[entries.length - 1]
+        if (entry) setInView(entry.isIntersecting)
+      },
+      { rootMargin }
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref, rootMargin])
+
+  return inView
 }
