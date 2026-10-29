@@ -1,19 +1,18 @@
 import { GlassProvider } from "@polinetwork/glass"
 import {
-  Aperture,
   ArrowRight,
   Bookmark,
+  Cat,
   ChevronRight,
-  Compass,
   Heart,
   House,
   Moon,
   Pause,
+  PawPrint,
   Play,
   SkipBack,
   SkipForward,
   Sun,
-  User,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -22,8 +21,8 @@ import { GlassButton, Segmented, ShowcaseContext, ShowGlass } from "./glass"
 import { type OrbCount, Orbs, PerfPanel } from "./perf"
 import { gallery, moods, photos } from "./photos"
 
-// A page made with the glass, the way an app would use it: a floating header, controls over photos, a player, a tab
-// bar. It is also the place to see what the glass costs, with as much of it on screen as a real page has, and more.
+// A page made with the glass, the way an app would use it (a floating header, controls over photos, a player, a tab
+// bar), as a magazine about cats. It is also the place to see what the glass costs, with as much of it on screen as a real page has, and more.
 
 const scrollToId = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
 
@@ -41,10 +40,12 @@ function Header({ dark, onDarkChange }: { dark: boolean; onDarkChange: (dark: bo
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="flex items-center gap-2 font-semibold tracking-tight"
+          className="flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold tracking-tight"
         >
-          <Aperture className="size-5" />
-          Lumen
+          <Cat className="size-5" />
+          <span>
+            Whisker<span className="hidden sm:inline"> Weekly</span>
+          </span>
         </button>
         <nav className="ml-4 hidden gap-1 md:flex">
           {sections.map((section) => (
@@ -91,8 +92,8 @@ function Hero() {
   return (
     <section className="relative">
       <img
-        src={photos.clouds(1600)}
-        alt="Mountain peaks above a sea of clouds at sunrise"
+        src={photos.couch(1600)}
+        alt="A tabby cat lying on a white couch, looking at the camera"
         className="h-[72vh] min-h-[460px] w-full rounded-[2rem] object-cover"
       />
       <ShowGlass
@@ -100,18 +101,18 @@ function Hero() {
         className="rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
         style={{ position: "absolute", top: 20, left: 20 }}
       >
-        Photo of the week
+        Cat of the week
       </ShowGlass>
       <ShowGlass className="max-w-md rounded-3xl p-6" style={{ position: "absolute", left: 20, right: 20, bottom: 20 }}>
-        <p className="text-xs font-semibold uppercase tracking-wider opacity-70">Featured story</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">Above the clouds</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider opacity-70">The interview</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">King of the couch</h1>
         <p className="mt-2 opacity-80">
-          Four days on a ridge where the weather sits below you: the route, the gear, and the light that made the climb
-          worth it.
+          Mochi has held the same cushion for six years. We sat down with him (he did not get up) to talk naps, sunbeams
+          and the 5am breakfast campaign.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <GlassButton tone="blue" className="px-5 py-2.5" onClick={() => scrollToId("stories")}>
-            Read the story
+            Read the interview
             <ArrowRight className="size-4" />
           </GlassButton>
           <GlassButton className="px-5 py-2.5" pressed={saved} onClick={() => setSaved((s) => !s)}>
@@ -131,13 +132,13 @@ function Explore({ mood, onMoodChange }: { mood: Mood; onMoodChange: (mood: Mood
     <section id="explore" className="scroll-mt-24 space-y-6">
       <SectionTitle
         eyebrow="Explore"
-        title="Find your light"
-        text="Pick a mood and the stories below follow it. The chips are glass over a photo of stage lights, the hardest kind of background for glass to stay readable on."
+        title="Find your cat"
+        text="Pick a kind of cat and the stories below follow it. The chips are glass over a garden full of kittens, as busy a background as glass has to stay readable on."
       />
       <div className="relative">
         <img
-          src={photos.concert(1600, 600)}
-          alt="Stage lights and confetti over a concert crowd"
+          src={photos.garden(1600, 600)}
+          alt="Kittens in a wicker basket in a garden"
           className="h-64 w-full rounded-[2rem] object-cover"
         />
         <div className="absolute inset-0 flex flex-wrap content-center justify-center gap-3 p-6">
@@ -173,8 +174,8 @@ function Stories({ mood }: { mood: Mood }) {
     <section id="stories" className="scroll-mt-24 space-y-6">
       <SectionTitle
         eyebrow="Stories"
-        title={mood === "All" ? "Latest stories" : `${mood} stories`}
-        text="Every card carries two pieces of glass: a caption bar and a like button, both bending the photo they sit on."
+        title={mood === "All" ? "Latest cats" : `${mood} cats`}
+        text="Every card carries two pieces of glass: a caption bar and a like button, both bending the photo of the cat they sit on."
       />
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {shown.map((photo) => {
@@ -228,26 +229,26 @@ function Listen() {
     <section id="listen" className="scroll-mt-24 space-y-6">
       <SectionTitle
         eyebrow="Listen"
-        title="Music for the long drive"
+        title="Lo-fi beats to nap to"
         text="A player floating over its own album art, with glass controls on glass."
       />
       <div className="relative">
         <img
-          src={photos.turntable(1600, 700)}
-          alt="Hands on a DJ deck lit in purple"
+          src={photos.sunglasses(1600, 700)}
+          alt="A grey cat wearing round sunglasses"
           className="h-[440px] w-full rounded-[2rem] object-cover"
         />
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <ShowGlass className="w-full max-w-sm rounded-[1.75rem] p-5">
             <div className="flex items-center gap-4">
               <img
-                src={photos.crowd(200, 200)}
-                alt="A singer in stage smoke"
+                src={photos.bandana(200, 200)}
+                alt="A grey and white cat in a yellow bandana, smiling"
                 className="size-16 rounded-2xl object-cover"
               />
               <div>
-                <div className="font-semibold">Night Drive</div>
-                <div className="text-sm opacity-70">Lumen Sessions · Vol. 3</div>
+                <div className="font-semibold">Purr Engine</div>
+                <div className="text-sm opacity-70">DJ Whiskers · Nap Sessions, Vol. 3</div>
               </div>
             </div>
             <div className="mt-5 h-1.5 rounded-full bg-current/15">
@@ -327,49 +328,49 @@ function GlassSwitch({
 }
 
 function Settings() {
-  const [range, setRange] = useState<"day" | "week" | "month">("week")
-  const [captions, setCaptions] = useState(true)
-  const [autoplay, setAutoplay] = useState(false)
+  const [treats, setTreats] = useState<"one" | "two" | "more">("two")
+  const [laser, setLaser] = useState(true)
+  const [door, setDoor] = useState(false)
   return (
     <section id="settings" className="scroll-mt-24 space-y-6">
       <SectionTitle
         eyebrow="Settings"
-        title="Controls that move"
+        title="House rules"
         text="The lens of the segmented control and the knobs of the switches are glass on glass: a lightly tinted layer that slides over the panel, blurring and tinting it as it goes."
       />
       <div className="relative">
         <img
-          src={photos.underwater(1600, 700)}
-          alt="Light and bubbles under the surface of the sea"
+          src={photos.rolling(1600, 700)}
+          alt="A ginger cat rolling on its back on the floor"
           className="h-[440px] w-full rounded-[2rem] object-cover"
         />
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <ShowGlass className="w-full max-w-md space-y-5 rounded-[1.75rem] p-5">
             <div className="space-y-2">
-              <div className="font-semibold">Highlights from the last</div>
+              <div className="font-semibold">Treats a day</div>
               <Segmented
                 options={[
-                  { value: "day", label: "Day" },
-                  { value: "week", label: "Week" },
-                  { value: "month", label: "Month" },
+                  { value: "one", label: "One" },
+                  { value: "two", label: "Two" },
+                  { value: "more", label: "Unlimited" },
                 ]}
-                value={range}
-                onChange={setRange}
+                value={treats}
+                onChange={setTreats}
               />
             </div>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="font-medium">Captions on photos</div>
-                <div className="text-sm opacity-70">Show the place and the date</div>
+                <div className="font-medium">Laser pointer</div>
+                <div className="text-sm opacity-70">Keep the red dot moving</div>
               </div>
-              <GlassSwitch checked={captions} onChange={setCaptions} label="Captions on photos" />
+              <GlassSwitch checked={laser} onChange={setLaser} label="Laser pointer" />
             </div>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="font-medium">Play videos by themselves</div>
-                <div className="text-sm opacity-70">Only on Wi-Fi</div>
+                <div className="font-medium">Open the door</div>
+                <div className="text-sm opacity-70">Every five minutes, both ways</div>
               </div>
-              <GlassSwitch checked={autoplay} onChange={setAutoplay} label="Play videos by themselves" />
+              <GlassSwitch checked={door} onChange={setDoor} label="Open the door" />
             </div>
           </ShowGlass>
         </div>
@@ -380,9 +381,9 @@ function Settings() {
 
 const tabs = [
   { value: "home", label: "Home", icon: House, target: null },
-  { value: "explore", label: "Explore", icon: Compass, target: "explore" },
+  { value: "explore", label: "Explore", icon: PawPrint, target: "explore" },
   { value: "saved", label: "Saved", icon: Heart, target: "stories" },
-  { value: "you", label: "You", icon: User, target: "settings" },
+  { value: "you", label: "You", icon: Cat, target: "settings" },
 ] as const
 
 function TabBar() {
@@ -433,8 +434,8 @@ export function Showcase() {
               <Listen />
               <Settings />
               <footer className="text-center text-sm text-muted-foreground">
-                Lumen is a made up magazine, to show the glass of @polinetwork/glass on a real page. Photos from
-                Unsplash.
+                Whisker Weekly is a made up magazine, to show the glass of @polinetwork/glass on a real page. No cat was
+                asked to get off the couch. Photos from Unsplash.
               </footer>
             </main>
             <TabBar />

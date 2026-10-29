@@ -2,23 +2,23 @@ const unsplash = (id: string, width: number, height?: number) =>
   `https://images.unsplash.com/photo-${id}?w=${width}${height ? `&h=${height}&fit=crop` : ""}&q=75`
 
 export const photos = {
-  clouds: (w: number, h?: number) => unsplash("1506905925346-21bda4d32df4", w, h),
-  concert: (w: number, h?: number) => unsplash("1514525253161-7a46d19cd819", w, h),
-  turntable: (w: number, h?: number) => unsplash("1470225620780-dba8ba36b745", w, h),
-  crowd: (w: number, h?: number) => unsplash("1493225457124-a3eb161ffa5f", w, h),
-  underwater: (w: number, h?: number) => unsplash("1511593358241-7eea1f3c84e5", w, h),
+  couch: (w: number, h?: number) => unsplash("1518791841217-8f162f1e1131", w, h),
+  garden: (w: number, h?: number) => unsplash("1517331156700-3c241d2b4d83", w, h),
+  sunglasses: (w: number, h?: number) => unsplash("1533738363-b7f9aef128ce", w, h),
+  bandana: (w: number, h?: number) => unsplash("1543852786-1cf6624b9987", w, h),
+  rolling: (w: number, h?: number) => unsplash("1511044568932-338cba0ad803", w, h),
 }
 
 export const gallery = [
-  { id: "1501785888041-af3ef285b470", title: "Turquoise lake", tag: "Water", count: 24 },
-  { id: "1470071459604-3b5ec3a7fe05", title: "Green ridge", tag: "Mountains", count: 18 },
-  { id: "1500530855697-b586d89ba3ee", title: "Canyon road", tag: "Desert", count: 31 },
-  { id: "1507525428034-b723cf961d3e", title: "Golden shore", tag: "Coast", count: 12 },
-  { id: "1519681393784-d120267933ba", title: "Night sky", tag: "Night", count: 9 },
-  { id: "1433086966358-54859d0ed716", title: "Waterfall", tag: "Forest", count: 27 },
-  { id: "1493246507139-91e8fad9978e", title: "Mirror lake", tag: "Water", count: 15 },
-  { id: "1464822759023-fed622ff2c3b", title: "Glacier valley", tag: "Mountains", count: 22 },
-  { id: "1441974231531-c6227db76b6e", title: "Old forest", tag: "Forest", count: 19 },
+  { id: "1570018144715-43110363d70a", title: "Three of a kind", tag: "Kittens", count: 24 },
+  { id: "1573865526739-10659fec78a5", title: "Golden hour", tag: "Ginger", count: 18 },
+  { id: "1494256997604-768d1f608cac", title: "Blanket fort", tag: "Sleepy", count: 31 },
+  { id: "1514888286974-6c03e2ca1dba", title: "Tuxedo at the ledge", tag: "Silly", count: 12 },
+  { id: "1526336024174-e58f5cdd8e13", title: "A butterfly friend", tag: "Fluffy", count: 9 },
+  { id: "1491485880348-85d48a9e5312", title: "Chair inspector", tag: "Tabby", count: 27 },
+  { id: "1561948955-570b270e7c36", title: "Plot twist", tag: "Silly", count: 15 },
+  { id: "1555685812-4b943f1cb0eb", title: "Sofa explorer", tag: "Kittens", count: 22 },
+  { id: "1472491235688-bdc81a63246e", title: "Blue eyes", tag: "Fluffy", count: 19 },
 ].map((photo) => ({ ...photo, src: unsplash(photo.id, 640, 480) }))
 
-export const moods = ["Mountains", "Coast", "Forest", "Night", "Water", "Desert"] as const
+export const moods = ["Kittens", "Tabby", "Ginger", "Fluffy", "Sleepy", "Silly"] as const
