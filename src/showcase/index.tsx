@@ -417,6 +417,7 @@ function TabBar() {
 export function Showcase() {
   const [dark, setDark] = useState(false)
   const [force3D, setForce3D] = useState(true)
+  const [layered, setLayered] = useState(true)
   const [orbs, setOrbs] = useState<OrbCount>("0")
   const [mood, setMood] = useState<Mood>("All")
   const context = useMemo(() => ({ dark, force3D }), [dark, force3D])
@@ -439,8 +440,15 @@ export function Showcase() {
               </footer>
             </main>
             <TabBar />
-            <PerfPanel orbs={orbs} onOrbsChange={setOrbs} force3D={force3D} onForce3DChange={setForce3D} />
-            <Orbs count={Number(orbs)} />
+            <PerfPanel
+              orbs={orbs}
+              onOrbsChange={setOrbs}
+              force3D={force3D}
+              onForce3DChange={setForce3D}
+              layered={layered}
+              onLayeredChange={setLayered}
+            />
+            <Orbs count={Number(orbs)} layered={layered} />
           </div>
         </div>
       </GlassProvider>

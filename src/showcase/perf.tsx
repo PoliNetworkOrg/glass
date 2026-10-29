@@ -1,3 +1,4 @@
+import { GlassLayer } from "@polinetwork/glass"
 import { Activity } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -46,11 +47,15 @@ export function PerfPanel({
   onOrbsChange,
   force3D,
   onForce3DChange,
+  layered,
+  onLayeredChange,
 }: {
   orbs: OrbCount
   onOrbsChange: (orbs: OrbCount) => void
   force3D: boolean
   onForce3DChange: (force3D: boolean) => void
+  layered: boolean
+  onLayeredChange: (layered: boolean) => void
 }) {
   const stats = useStats()
   // collapsed on a phone, where it would cover half the page
@@ -99,6 +104,18 @@ export function PerfPanel({
             </div>
             <label className="flex cursor-pointer items-center justify-between gap-2">
               <span>
+                Orbs over the glass
+                <span className="block text-xs opacity-60">On a layer of their own, bending the glass below</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={layered}
+                onChange={(e) => onLayeredChange(e.target.checked)}
+                className="size-4 accent-sky-500"
+              />
+            </label>
+            <label className="flex cursor-pointer items-center justify-between gap-2">
+              <span>
                 Force 3D
                 <span className="block text-xs opacity-60">Off follows the device check</span>
               </span>
@@ -124,33 +141,39 @@ const ORB_KEYFRAMES = `
 @keyframes orb-drift-c { 0%, 100% { transform: translate(0, 0) } 33% { transform: translate(24vw, -20vh) } 66% { transform: translate(-20vw, 24vh) } }
 `
 
-export function Orbs({ count }: { count: number }) {
+/**
+ * @param layered On layer 1, above everything else, where they bend the header, the tab bar and the cards as they pass
+ * over them. Otherwise on layer 0, under the header and the tab bar, bending only the page.
+ */
+export function Orbs({ count, layered }: { count: number; layered: boolean }) {
   if (count === 0) return null
   return (
-    <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden" aria-hidden>
-      <style>{ORB_KEYFRAMES}</style>
-      {Array.from({ length: count }, (_, i) => {
-        const size = 56 + ((i * 37) % 48)
-        return (
-          <ShowGlass
-            // biome-ignore lint/suspicious/noArrayIndexKey: the orbs are only a count
-            key={i}
-            preset={i % 3 === 0 ? "regular" : "clear"}
-            tone={i % 5 === 0 ? "blue" : "neutral"}
-            className="rounded-full"
-            style={{
-              position: "absolute",
-              width: size,
-              height: size,
-              left: `${(i * 23) % 80}%`,
-              top: `${(i * 41) % 75}%`,
-              animation: `orb-drift-${"abc"[i % 3]} ${9 + (i % 7)}s ease-in-out ${-i * 0.7}s infinite`,
-            }}
-          >
-            {null}
-          </ShowGlass>
-        )
-      })}
-    </div>
+    <GlassLayer layer={layered ? 1 : 0}>
+      <div className={cn("pointer-events-none fixed inset-0 overflow-hidden", layered ? "z-[60]" : "z-30")} aria-hidden>
+        <style>{ORB_KEYFRAMES}</style>
+        {Array.from({ length: count }, (_, i) => {
+          const size = 56 + ((i * 37) % 48)
+          return (
+            <ShowGlass
+              // biome-ignore lint/suspicious/noArrayIndexKey: the orbs are only a count
+              key={i}
+              preset={i % 3 === 0 ? "regular" : "clear"}
+              tone={i % 5 === 0 ? "blue" : "neutral"}
+              className="rounded-full"
+              style={{
+                position: "absolute",
+                width: size,
+                height: size,
+                left: `${(i * 23) % 80}%`,
+                top: `${(i * 41) % 75}%`,
+                animation: `orb-drift-${"abc"[i % 3]} ${9 + (i % 7)}s ease-in-out ${-i * 0.7}s infinite`,
+              }}
+            >
+              {null}
+            </ShowGlass>
+          )
+        })}
+      </div>
+    </GlassLayer>
   )
 }
