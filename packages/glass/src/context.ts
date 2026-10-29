@@ -28,3 +28,8 @@ export function useGlass() {
 
 /** Whether the glass is inside another glass */
 export const GlassNestContext = createContext(false)
+
+/**
+ * The layer of the glass inside it, see {@link GlassLayer}
+ */
+export const GlassLayerContext = createContext(0)

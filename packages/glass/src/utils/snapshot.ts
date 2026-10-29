@@ -256,13 +256,14 @@ function prepare(sheet: CSSStyleSheet, fonts: Set<string>, fontsKey: string): Pr
 }
 
 /** All of the page's CSS */
-async function pageCss() {
+/** All of the page's CSS. `ignore`: without what is marked to be left out, as the picture of the page needs it */
+async function pageCss(ignore = true) {
   const fonts = loadedFonts()
   const fontsKey = [...fonts].sort().join(",")
   const sheets = [...document.styleSheets, ...document.adoptedStyleSheets]
   const parts = await Promise.all(sheets.map((sheet) => prepare(sheet, fonts, fontsKey)))
   // the glass doesn't see itself, nor anything marked to be left out, but they keep their place in the layout
-  parts.push("[glass-ignore], [glass-ignore] * { visibility: hidden !important; }")
+  if (ignore) parts.push("[glass-ignore], [glass-ignore] * { visibility: hidden !important; }")
   return parts.join("\n")
 }
 
@@ -403,4 +404,78 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
   }
   return { canvas, width, height }
+}
+
+/**
+ * What the ancestors of an element are made of in the picture of the element: their classes and attributes, for the
+ * selectors and the inheritance of its style, and nothing of their own (no background, no box, no effect) to be seen
+ * around it. Its shadow, which the glass casts below itself, and its canvas, which the renderer draws, are left out.
+ */
+const ELEMENT_CSS = `
+[data-glass-shell] {
+  background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+  outline: none !important; transform: none !important; filter: none !important; backdrop-filter: none !important;
+  perspective: none !important; contain: none !important; clip-path: none !important; mask: none !important;
+  will-change: auto !important;
+}
+[data-glass-shell]::before, [data-glass-shell]::after { display: none !important; }
+._polinetwork_glass-drop, ._polinetwork_glass-ring, canvas { visibility: hidden !important; }
+`
+
+/**
+ * Takes a picture of one element of the page: what a glass has over its glass (its tint, its edges, what is in it), for
+ * what is behind a higher layer of glass. It is the element as it is laid out, without its transforms, on a
+ * transparent background, with `margin` px around it for what overflows it.
+ *
+ * @returns The picture, `margin` px bigger than the box of the element on each side
+ */
+export async function snapshotElement(el: HTMLElement, margin: number): Promise<HTMLCanvasElement> {
+  if (!viewport[""][0]) viewport = measureViewport()
+  const width = el.offsetWidth
+  const height = el.offsetHeight
+
+  // the element in empty copies of its ancestors
+  const root = document.documentElement.cloneNode(false) as HTMLElement
+  const head = document.createElementNS(XHTML_NS, "head")
+  root.append(head)
+  let shell: HTMLElement = root
+  root.setAttribute("data-glass-shell", "")
+  const ancestors: HTMLElement[] = []
+  for (let n = el.parentElement; n && n !== document.documentElement; n = n.parentElement) ancestors.unshift(n)
+  for (const ancestor of ancestors) {
+    const copy = ancestor.cloneNode(false) as HTMLElement
+    copy.setAttribute("data-glass-shell", "")
+    shell.append(copy)
+    shell = copy
+  }
+  const copy = el.cloneNode(true) as HTMLElement
+  shell.append(copy)
+
+  const [css] = await Promise.all([pageCss(false), copyState(el, copy)])
+  for (const node of copy.querySelectorAll('script, noscript, style, link[rel~="stylesheet"]')) node.remove()
+  // where the picture is, and as big as the box, whatever the layout and the transforms of the page put on it
+  copy.style.cssText +=
+    `;position: fixed !important; inset: auto !important; left: ${margin}px !important; top: ${margin}px !important;` +
+    ` width: ${width}px !important; height: ${height}px !important; margin: 0 !important; transform: none !important;` +
+    " translate: none !important; scale: none !important; rotate: none !important;"
+  const style = document.createElementNS(XHTML_NS, "style")
+  style.textContent = css + ELEMENT_CSS
+  head.append(style)
+
+  const w = width + margin * 2
+  const h = height + margin * 2
+  const svg =
+    `<svg xmlns="${SVG_NS}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    `<foreignObject x="0" y="0" width="100%" height="100%">${new XMLSerializer().serializeToString(root)}</foreignObject>` +
+    "</svg>"
+  const img = new Image()
+  img.decoding = "async"
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  await img.decode()
+
+  const canvas = document.createElement("canvas")
+  canvas.width = Math.max(1, w)
+  canvas.height = Math.max(1, h)
+  canvas.getContext("2d")?.drawImage(img, 0, 0, w, h)
+  return canvas
 }

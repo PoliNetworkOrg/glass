@@ -1,5 +1,5 @@
 export type { GlassElevation, GlassTheme } from "./edge"
-export { Glass, type GlassProps } from "./glass"
+export { Glass, GlassLayer, type GlassProps } from "./glass"
 export { GlassProvider } from "./glass-provider"
 export { type GlassPreset, type GlassPresetName, glassColors, glassPresets, glassTints, withPreset } from "./presets"
 export { type SceneConfig, SceneConfigSchema } from "./types/schemas"

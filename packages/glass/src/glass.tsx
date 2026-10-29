@@ -2,7 +2,7 @@ import { useReducedMotion } from "motion/react"
 import { useContext, useEffect, useMemo } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
-import { GlassNestContext, useGlass } from "./context"
+import { GlassLayerContext, GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import type { GlassPreset } from "./presets"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
@@ -35,6 +35,12 @@ export type GlassProps = {
   interactive?: boolean
   /** An interactive glass above the content (a fixed header, a popover): a touch on it never scrolls what is under it */
   claimTouch?: boolean
+  /**
+   * The layer of the glass. The glass of layer 0 bends the page, which has no glass in it; the glass of a higher layer
+   * bends what is behind it on the screen, the glass of the layers below included (a bubble floating over a fixed
+   * header). By default the layer of the {@link GlassLayer} it is in, or 0.
+   */
+  layer?: number
 } & React.HTMLAttributes<HTMLDivElement>
 
 /**
@@ -43,8 +49,7 @@ export type GlassProps = {
  * A React component that renders a glass effect underneath its children.
  *
  * This component is intended to be used as a div, whose background will be
- * rendered with a glass effect. It uses Three.js and React Three Fiber to create
- * the 3D effect.
+ * rendered with a glass effect, drawn with WebGL2.
  *
  * When 3D rendering is not available (due to user preferences or performance constraints),
  * it falls back to a simpler glass effect using pure CSS.
@@ -59,8 +64,11 @@ export function Glass(props: GlassProps) {
     theme,
     interactive = false,
     claimTouch = false,
+    layer: ownLayer,
     ...rest
   } = props
+  const layerAround = useContext(GlassLayerContext)
+  const layer = ownLayer ?? layerAround
   // parsed again only when the options change, not each time the parent renders: a new scene is a new draw
   const optionsKey = JSON.stringify(options)
   const scene = useMemo(() => SceneConfigSchema.parse(JSON.parse(optionsKey)), [optionsKey])
@@ -158,7 +166,7 @@ export function Glass(props: GlassProps) {
       >
         {do3D ? (
           <>
-            <Glass3D {...commonProps} snapshot={snapshot} scrollLead={scrollLead} />
+            <Glass3D {...commonProps} snapshot={snapshot} scrollLead={scrollLead} layer={layer} element={outer} />
             {scene.tint.opacity > 0 && (
               <div
                 className="_polinetwork_glass-tint"
@@ -187,4 +195,19 @@ export function Glass(props: GlassProps) {
       <GlassNestContext.Provider value={true}>{children}</GlassNestContext.Provider>
     </div>
   )
+}
+
+/**
+ * # GlassLayer
+ * Puts the glass inside it on a layer, above the glass of the layers below it, which it bends as it bends the page:
+ * a floating player, a popover, a bubble that passes over a fixed header. Glass that is given a `layer` of its own
+ * keeps it.
+ *
+ * @example
+ * <GlassLayer layer={1}>
+ *   <Glass className="fixed bottom-4 right-4" ...>Now playing</Glass>
+ * </GlassLayer>
+ */
+export function GlassLayer({ layer, children }: { layer: number; children: React.ReactNode }) {
+  return <GlassLayerContext.Provider value={layer}>{children}</GlassLayerContext.Provider>
 }

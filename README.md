@@ -42,6 +42,7 @@ A `div` (it takes the usual props) with the glass drawn behind its children.
 | `theme` | `light` or `dark`, which sets the light on the edges. By default it follows the lightness of `color`. |
 | `interactive` | For glass that is a control. It lifts on hover (1.045), snaps down (0.94) and is lit (brighter, more saturated) while pressed, and when dragged it stretches toward the pointer with an elastic falloff and squashes across, then springs back. A drag is a gesture, so the click that would follow it is swallowed (a tap still clicks). A press that starts on a link or button inside the glass is theirs. With `prefers-reduced-motion` it doesn't move, and is only lit. Default `false`. |
 | `claimTouch` | For an interactive glass above the content (a fixed header, a popover): a touch on it never scrolls what is under it. Otherwise a touch on the glass still scrolls the page, and the press carries on while it does. |
+| `layer` | The [layer](#layers) of the glass. Default: the one of the `<GlassLayer>` it is in, or 0. |
 | `force3D` | Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion. |
 | `disable3D` | Always use the CSS glass. |
 
@@ -50,6 +51,32 @@ presets look alike in both, but it can't bend what is behind it: a CSS backdrop 
 until the background is captured, while the glass is far off screen, and where the 3D one isn't
 available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the device is too slow (see
 [Performance](#performance)), or when it is turned off.
+
+## Layers
+
+The glass bends a picture of the page, which has no glass in it: a glass doesn't see another glass. Where one floats
+over another (a bubble over a fixed header, a player over a card) put it on a higher layer, and it bends what is
+behind it on the screen, the glass below included, with what that glass has over it (its tint, its edges, its text).
+
+```tsx
+<Glass layer={1} ...>  {/* one glass */}
+
+<GlassLayer layer={1}>  {/* everything in a floating part of the page */}
+  <Glass ...>Now playing</Glass>
+</GlassLayer>
+```
+
+The glass of layer 0, all of it unless it is told otherwise, is drawn as it always was, and a page that uses no other
+layer pays nothing for them. For a higher layer the renderer draws what is behind it, over the region of the screen
+the layer covers, from the page and from what the glass below drew last, with a picture of what each has over its
+glass, taken the first time a layer above needs it and again when the element changes. It is drawn again only when
+something in that region moved or changed. The layer has to be drawn above the ones below too (its `z-index`): the
+layer says what the glass sees, not where it is drawn.
+
+What a higher layer doesn't see of the glass below: its shadow, its light while pressed, and the blur of glass drawn
+with CSS (nested glass, `disable3D`), which it sees through the glass it is in, tinted but not blurred. The demo's
+Showcase puts up to 32 glass orbs moving on layer 1, over 48 glasses on layer 0: Chrome keeps 60fps, 58 while
+scrolling.
 
 ## Presets
 
@@ -116,7 +143,7 @@ of the rim and no `ior` or `thickness` made it follow this profile.
   inlined once and kept. The page is only captured while some glass is drawn in 3D, so a page whose glass is all CSS
   never pays for it. One capture runs at a time, with a frame drawn between two of them, so while a window is resized
   the glass follows it at about a capture a frame without holding the page's frames back.
-- **One renderer.** All the glass on the page is drawn by a single WebGL2 context, which holds the picture of the page
+- **One renderer.** All the glass on the page, of all its layers, is drawn by a single WebGL2 context, which holds the picture of the page
   on the GPU once and uploads it once per capture. Each frame the glasses that changed are drawn side by side on its
   canvas, which is taken as one bitmap and copied, a piece to each, to the canvas the glass shows. A context per glass
   held a copy of the picture each and ran into the browser's cap on contexts (16 in Chrome, past which the oldest are

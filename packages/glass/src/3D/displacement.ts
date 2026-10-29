@@ -26,31 +26,10 @@ export const VERTEX = /* glsl */ `#version 300 es
   }
 `
 
-// How far in from the rim, and which way is out, for the point p (px from the center) of a box with corners of
-// radius r and superellipse exponent n. Then the offset the profile gives it: nothing past the bezel, and inside
-// it the sample is taken from further in (it never reads past the edge, where the backdrop ends), by an amount
-// that grows toward the rim as t ** curve (t is 0 where the bezel meets the face and 1 at the rim).
-export const FRAGMENT = /* glsl */ `#version 300 es
-  precision highp float;
-  precision highp int;
-
-  uniform highp sampler2D uMap;
-  uniform vec2 uTexSize;
-  uniform vec2 uBg;
-  uniform vec2 uSize;
-  /** Where the glass starts in the canvas it is drawn on, so its grain doesn't depend on where that is */
-  uniform vec2 uOrigin;
-  uniform float uRadius;
-  uniform float uExp;
-  uniform float uBezel;
-  uniform float uShift;
-  uniform float uCurve;
-  uniform float uDispersion;
-  uniform float uFrost;
-  in vec2 vPos;
-  out vec4 fragColor;
-
-  // x: how far in from the nearest edge (negative outside), yz: that edge's outward normal
+/** How far in from the rim of a box, and which way is out: shared by the glass and by what composes the layers */
+export const EDGE = /* glsl */ `
+  // x: how far in from the nearest edge (negative outside), yz: that edge's outward normal, for the point p (px from
+  // the center) of a box of half size halfSize with corners of radius r and superellipse exponent n
   vec3 edge(vec2 p, vec2 halfSize, float r, float n) {
     vec2 q = abs(p) - (halfSize - r);
     float inward;
@@ -69,10 +48,53 @@ export const FRAGMENT = /* glsl */ `#version 300 es
     }
     return vec3(inward, nrm * sign(p + vec2(1e-6)));
   }
+`
 
+/** The sRGB curves: three.js's, which the glass has always been written with, and the exact ones */
+export const SRGB = /* glsl */ `
+  vec3 toSRGB(vec3 c) {
+    return mix(pow(c, vec3(0.41666)) * 1.055 - vec3(0.055), c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
+  }
+  vec3 encodeSRGB(vec3 c) {
+    return mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
+  }
+  vec3 decodeSRGB(vec3 c) {
+    return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, vec3(lessThanEqual(c, vec3(0.04045))));
+  }
+`
+
+/**
+ * The glass. With the offset the profile gives the point (nothing past the bezel, and inside it the sample is taken
+ * from further in, never past the edge where the backdrop ends, by an amount that grows toward the rim as t ** curve,
+ * t being 0 where the bezel meets the face and 1 at the rim), the backdrop is read, frosted, and written in sRGB.
+ *
+ * @param encoded The backdrop is a texture of sRGB values that the GPU doesn't decode (what is behind a higher
+ * layer), and not the picture of the page (an sRGB texture, read in linear light)
+ */
+export const fragment = (encoded: boolean) => /* glsl */ `#version 300 es
+  precision highp float;
+  precision highp int;
+
+  uniform highp sampler2D uMap;
+  uniform vec2 uTexSize;
+  uniform vec2 uBg;
+  uniform vec2 uSize;
+  /** Where the glass starts in the canvas it is drawn on, so its grain doesn't depend on where that is */
+  uniform vec2 uOrigin;
+  uniform float uRadius;
+  uniform float uExp;
+  uniform float uBezel;
+  uniform float uShift;
+  uniform float uCurve;
+  uniform float uDispersion;
+  uniform float uFrost;
+  in vec2 vPos;
+  out vec4 fragColor;
+${EDGE}
+${SRGB}
   vec3 sampleAt(vec2 p) {
     vec2 uv = (p - uBg) / uTexSize + 0.5;
-    return texture(uMap, uv).rgb;
+    return ${encoded ? "decodeSRGB(texture(uMap, uv).rgb)" : "texture(uMap, uv).rgb"};
   }
 
   // the backdrop averaged over a disc of radius uFrost px: taps on a spiral that covers it evenly, turned a little
@@ -88,11 +110,6 @@ export const FRAGMENT = /* glsl */ `#version 300 es
       c += sampleAt(p + vec2(cos(a), sin(a)) * r);
     }
     return c / 25.0;
-  }
-
-  // the page is read in linear light (the texture is sRGB) and written back to sRGB, as three.js did
-  vec3 toSRGB(vec3 c) {
-    return mix(pow(c, vec3(0.41666)) * 1.055 - vec3(0.055), c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
   }
 
   void main() {

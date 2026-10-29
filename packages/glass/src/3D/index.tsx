@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
 import type { Snapshot } from "../utils/snapshot"
@@ -11,6 +11,10 @@ export type Glass3DProps = GlassFallbackProps & {
   snapshot: Snapshot
   /** How far ahead, in ms, the page is drawn while it moves under the glass */
   scrollLead?: number
+  /** The layer of the glass: the glass of a higher layer bends the glass below it, see `layer` of the glass */
+  layer?: number
+  /** The element of the glass, whose picture is what the glass of a higher layer sees of it over its glass */
+  element: RefObject<HTMLElement | null>
 }
 
 /**
@@ -36,30 +40,32 @@ export function Glass3D(props: Glass3DProps) {
     const el = canvas.current
     if (!renderer || !el) return
     const predict = createPredictor()
-    let last = ""
-    let lastSnapshot: Snapshot | null = null
     return renderer.add({
       canvas: el,
-      frame: (time, force) => {
+      frame: (time) => {
         const p = current.current
+        const element = p.element.current
         const { width: w, height: h, layoutWidth, layoutHeight, left, top } = p.bounds.get()
-        if (w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return null
+        if (!element || w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return null
+        const lead = p.scrollLead ?? 0
         // Where the center of the glass is on the page, and where it will be when this frame is on screen. It is what
         // moves with the scroll for a glass that stays in place on the screen, and what doesn't for one that scrolls
         // with the page, which is drawn in place by the browser itself.
-        const [cx, cy] = predict(time, frameScroll.x + left + w / 2, frameScroll.y + top + h / 2, p.scrollLead ?? 0)
+        const [cx, cy] = predict(time, frameScroll.x + left + w / 2, frameScroll.y + top + h / 2, lead)
         // Where the center of the page is, from the center of the glass, y up: that much to its left, and the same
         // distance above it. The two come out with opposite signs because y up is the other way from the page's.
         const bg: [number, number] = [p.snapshot.width / 2 - cx, cy - p.snapshot.height / 2]
-        const { shape, surface } = p.scene
-        const key = `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${JSON.stringify(shape)}`
-        if (key === last && p.snapshot === lastSnapshot && !force) return null
-        last = key
-        lastSnapshot = p.snapshot
+        const { shape, surface, tint } = p.scene
         return {
           snapshot: p.snapshot,
+          layer: p.layer ?? 0,
+          element,
           width: Math.floor(layoutWidth),
           height: Math.floor(layoutHeight),
+          drawn: [w, h],
+          center: [cx, cy],
+          lead,
+          saturate: tint.saturate,
           uniforms: profileUniforms(
             w,
             h,
@@ -71,6 +77,7 @@ export function Glass3D(props: Glass3DProps) {
             shape,
             surface.frost
           ),
+          key: `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${JSON.stringify(shape)}`,
         }
       },
     })
