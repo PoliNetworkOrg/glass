@@ -8,8 +8,8 @@ import { LENS_COLOR, lensOptions } from "./showcase/glass"
 export type Route = "playground" | "showcase"
 
 const pages: { route: Route; href: string; label: string }[] = [
-  { route: "playground", href: "#/", label: "Playground" },
-  { route: "showcase", href: "#/showcase", label: "Showcase" },
+  { route: "showcase", href: "#/", label: "Showcase" },
+  { route: "playground", href: "#/playground", label: "Playground" },
 ]
 
 const subscribe = (onChange: () => void) => {
@@ -17,10 +17,11 @@ const subscribe = (onChange: () => void) => {
   return () => window.removeEventListener("hashchange", onChange)
 }
 
-const read = (): Route => (window.location.hash.replace(/^#\/?/, "") === "showcase" ? "showcase" : "playground")
+// the showcase is the demo's front page, and `#/showcase`, where it was first, still leads to it
+const read = (): Route => (window.location.hash.replace(/^#\/?/, "") === "playground" ? "playground" : "showcase")
 
 export function useRoute() {
-  return useSyncExternalStore(subscribe, read, () => "playground" as const)
+  return useSyncExternalStore(subscribe, read, () => "showcase" as const)
 }
 
 /**

@@ -96,9 +96,9 @@ scrolling.
 
 ## Configuration
 
-All the fields have defaults, and the demo (`pnpm dev`) has a control for each. Its Showcase page (`#/showcase`) is a
-made up magazine built with the glass (a floating header, controls over photos, a player, a tab bar) with a panel of
-live numbers and moving glass to load it with.
+All the fields have defaults, and the demo's Playground (`pnpm dev`, then `#/playground`) has a control for each. The
+demo opens on its Showcase: a made up magazine built with the glass (a floating header, controls over photos, a player,
+a tab bar), with a panel of live numbers and moving glass to load it with.
 
 | Field | Range | Default | |
 | --- | --- | --- | --- |
