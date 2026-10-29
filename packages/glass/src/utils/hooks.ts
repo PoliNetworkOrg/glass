@@ -2,7 +2,7 @@ import { useMotionValue } from "motion/react"
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { releaseSnapshot } from "../3D/renderer"
 import { watchFrames } from "./frames"
-import { type Snapshot, snapshot } from "./snapshot"
+import { onMediaChange, type Snapshot, snapshot } from "./snapshot"
 
 /**
  * React hook to handle async initializers
@@ -128,11 +128,14 @@ export function usePageSnapshot(deps: unknown[] = [], blur: number = 0, enabled:
     const fontsLoaded = () => capturer.schedule(LOAD_SETTLE_MS)
     document.addEventListener("load", loaded, true)
     document.fonts.addEventListener("loadingdone", fontsLoaded)
+    // the page restyled by a media query (the device's theme) looks different at the same size
+    const stopMedia = onMediaChange(() => capturer.schedule())
     return () => {
       capturer.stop()
       observer.disconnect()
       document.removeEventListener("load", loaded, true)
       document.fonts.removeEventListener("loadingdone", fontsLoaded)
+      stopMedia()
     }
   }, [capturer, enabled])
 

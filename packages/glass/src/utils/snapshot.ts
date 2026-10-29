@@ -208,14 +208,33 @@ function rulesText(rules: CSSRuleList, fonts: Set<string>): string {
  * asked of the page instead, and what holds goes in as it is, without the query.
  */
 const mediaLists = new Map<string, MediaQueryList>()
+const mediaListeners = new Set<() => void>()
+const mediaChanged = () => {
+  for (const listener of mediaListeners) listener()
+}
 function mediaMatches(query: string) {
   if (!query || query === "all") return true
   let list = mediaLists.get(query)
   if (!list) {
     list = window.matchMedia(query)
+    list.addEventListener("change", mediaChanged)
     mediaLists.set(query, list)
   }
   return list.matches
+}
+
+/**
+ * Calls `listener` when one of the media queries of the page's CSS changes what it says: the device going to its dark
+ * theme, a phone turned, more contrast asked for. The page looks different then without changing its size or its
+ * DOM, so nothing else would tell the glass to take its pictures again.
+ *
+ * @returns A function that stops it
+ */
+export function onMediaChange(listener: () => void) {
+  mediaListeners.add(listener)
+  return () => {
+    mediaListeners.delete(listener)
+  }
 }
 /** What the media queries met so far say now: when it changes, the CSS made with them is out of date */
 const mediaKey = () => [...mediaLists.values()].map((list) => (list.matches ? 1 : 0)).join("")

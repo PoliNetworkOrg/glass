@@ -1,6 +1,6 @@
 import { drawFrames, frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
-import { type Snapshot, snapshotElement } from "../utils/snapshot"
+import { onMediaChange, type Snapshot, snapshotElement } from "../utils/snapshot"
 import { GLASS_FRAGMENT, GLASS_VERTEX, PAGE_FRAGMENT, PAGE_VERTEX } from "./composite"
 import { fragment, type GlassUniforms, QUAD, VERTEX } from "./displacement"
 
@@ -192,6 +192,11 @@ class GlassRenderer {
     if (!gl) throw new Error("glass: no WebGL2")
     this.gl = gl
     this.compile()
+
+    // the pictures of the elements too look different when a media query of the page changes (the device's theme)
+    onMediaChange(() => {
+      for (const entry of this.entries.values()) if (entry.overlay) entry.overlay.stale = true
+    })
 
     const canvas = this.canvas as EventTarget
     canvas.addEventListener("webglcontextlost", (e) => {
