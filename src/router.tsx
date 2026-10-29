@@ -1,6 +1,7 @@
 import { Glass, glassColors, glassPresets } from "@polinetwork/glass"
 import { useSyncExternalStore } from "react"
 import { cn } from "@/lib/utils"
+import { LENS_COLOR, lensOptions } from "./showcase/glass"
 
 // The pages of the demo, in the hash, so that the static deploy needs no server routing
 
@@ -22,13 +23,17 @@ export function useRoute() {
   return useSyncExternalStore(subscribe, read, () => "playground" as const)
 }
 
-/** Switches between the pages of the demo */
-export function PagePicker({ dark = false, force3D }: { dark?: boolean; force3D?: boolean }) {
+/**
+ * Switches between the pages of the demo.
+ *
+ * @param lens It sits on another glass (the header of the showcase): slightly tinted, see `lensOptions`
+ */
+export function PagePicker({ dark = false, force3D, lens }: { dark?: boolean; force3D?: boolean; lens?: boolean }) {
   const route = useRoute()
   return (
     <Glass
-      options={glassPresets.regular}
-      color={dark ? glassColors.dark : glassColors.light}
+      options={lens ? lensOptions(dark) : glassPresets.regular}
+      color={lens ? LENS_COLOR : dark ? glassColors.dark : glassColors.light}
       force3D={force3D}
       className={cn("flex gap-1 rounded-full p-1 text-sm font-medium", dark ? "text-white" : "text-slate-900")}
     >

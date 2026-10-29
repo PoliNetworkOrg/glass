@@ -1,8 +1,8 @@
 import {
   Glass,
-  glassColors,
   type GlassPresetName,
   GlassProvider,
+  glassColors,
   glassTints,
   type SceneConfig,
   SceneConfigSchema,
@@ -12,8 +12,8 @@ import "./App.css"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DemoOptions } from "./options"
-import { PagePicker } from "./router"
 import { getDefaultValues } from "./options/utils"
+import { PagePicker } from "./router"
 
 const kittens = [
   {

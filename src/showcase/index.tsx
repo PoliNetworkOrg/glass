@@ -60,7 +60,7 @@ function Header({ dark, onDarkChange }: { dark: boolean; onDarkChange: (dark: bo
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
           <ShowcaseContext.Consumer>
-            {({ force3D }) => <PagePicker dark={dark} force3D={force3D} />}
+            {({ force3D }) => <PagePicker dark={dark} force3D={force3D} lens />}
           </ShowcaseContext.Consumer>
           <GlassButton
             label={dark ? "Light theme" : "Dark theme"}
@@ -335,7 +335,7 @@ function Settings() {
       <SectionTitle
         eyebrow="Settings"
         title="Controls that move"
-        text="The lens of the segmented control and the knobs of the switches are glass that slides: it bends what is under it all the way, not only where it stops."
+        text="The lens of the segmented control and the knobs of the switches are glass on glass: a lightly tinted layer that slides over the panel, blurring and tinting it as it goes."
       />
       <div className="relative">
         <img

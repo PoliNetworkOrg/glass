@@ -1,4 +1,4 @@
-import { Glass, type GlassProps, glassColors, glassPresets, glassTints } from "@polinetwork/glass"
+import { Glass, type GlassProps, glassColors, glassPresets, glassTints, withPreset } from "@polinetwork/glass"
 import { createContext, type KeyboardEvent, useContext } from "react"
 import { cn } from "@/lib/utils"
 
@@ -9,23 +9,43 @@ export type Tone = "neutral" | keyof typeof glassTints
 
 export const ShowcaseContext = createContext({ dark: false, force3D: true })
 
+/** Whether a glass is inside another one */
+const NestedContext = createContext(false)
+
+/**
+ * Glass on glass: a lens, a knob, a button on a panel. The library draws it with the CSS glass, which blurs and tints
+ * the glass under it, and it is only slightly tinted, white in both themes, so it reads as a lighter layer on it.
+ */
+export const lensOptions = (dark: boolean) =>
+  withPreset("clear", {
+    surface: { frost: 0.5 },
+    tint: { opacity: dark ? 0.14 : 0.4, saturate: 1 },
+    edge: { shadow: 0.5 },
+  })
+export const LENS_COLOR = "#ffffff"
+
 type ShowGlassProps = Omit<GlassProps, "options" | "color"> & {
   tone?: Tone
   preset?: "regular" | "clear"
 }
 
 /** A glass in the theme of the page: neutral by default, or tinted with one of the system colors */
-export function ShowGlass({ tone = "neutral", preset = "regular", className, ...rest }: ShowGlassProps) {
+export function ShowGlass({ tone = "neutral", preset = "regular", className, children, ...rest }: ShowGlassProps) {
   const { dark, force3D } = useContext(ShowcaseContext)
+  const nested = useContext(NestedContext)
   const tinted = tone !== "neutral"
+  const options = tinted ? glassPresets.tinted : nested ? lensOptions(dark) : glassPresets[preset]
+  const color = tinted ? glassTints[tone] : nested ? LENS_COLOR : dark ? glassColors.dark : glassColors.light
   return (
     <Glass
-      options={tinted ? glassPresets.tinted : glassPresets[preset]}
-      color={tinted ? glassTints[tone] : dark ? glassColors.dark : glassColors.light}
+      options={options}
+      color={color}
       force3D={force3D}
       className={cn(tinted || dark ? "text-white" : "text-slate-900", className)}
       {...rest}
-    />
+    >
+      <NestedContext.Provider value={true}>{children}</NestedContext.Provider>
+    </Glass>
   )
 }
 
@@ -65,8 +85,8 @@ export function GlassButton({ onClick, label, pressed, className, children, ...r
 }
 
 /**
- * A row of options with a glass lens that slides to the chosen one. The lens moves by its `left`, a change of layout
- * the glass follows on every frame, so it bends what is under it all the way.
+ * A row of options with a lens that slides to the chosen one. The lens is glass on glass, so it is the slightly tinted
+ * CSS glass (see `lensOptions`), and the browser keeps its backdrop in step as it moves.
  */
 export function Segmented<T extends string>({
   options,
