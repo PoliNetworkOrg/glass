@@ -218,6 +218,27 @@ async function pageCss() {
   return parts.join("\n")
 }
 
+const isTransparent = (color: string) => color === "transparent" || /\/\s*0\)$|,\s*0\)$/.test(color)
+
+/**
+ * The colors the page is painted on, bottom first: the browser's canvas (white, or dark under a dark color scheme),
+ * and the background of <html>, or of <body> where <html> has none. CSS spreads that one over the whole canvas, past
+ * the box of either, which the copy in the picture can't do: where the page is wider or taller than its <html> (a
+ * phone, with something overflowing it) the picture would be empty there, and the glass would show it gray.
+ */
+function canvasColors() {
+  const probe = document.createElement("div")
+  probe.style.cssText = "position: absolute; visibility: hidden; background-color: Canvas;"
+  document.documentElement.append(probe)
+  const colors = [getComputedStyle(probe).backgroundColor]
+  probe.remove()
+  const root = [document.documentElement, document.body]
+    .map((el) => getComputedStyle(el).backgroundColor)
+    .find((color) => !isTransparent(color))
+  if (root) colors.push(root)
+  return colors
+}
+
 /** The biggest texture this device takes, and so the biggest the picture can be */
 let maxTexture = 0
 function maxTextureSize() {
@@ -325,6 +346,13 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
   const canvas = document.createElement("canvas")
   canvas.width = Math.max(1, Math.floor(width * scale))
   canvas.height = Math.max(1, Math.floor(height * scale))
-  canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height)
+  const ctx = canvas.getContext("2d")
+  if (ctx) {
+    for (const color of canvasColors()) {
+      ctx.fillStyle = color
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+    }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  }
   return { canvas, width, height }
 }
