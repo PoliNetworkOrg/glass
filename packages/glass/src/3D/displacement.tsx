@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef } from "react"
 import { type Mesh, ShaderMaterial, type Texture, Vector2 } from "three"
 import type { ShapeConfig } from "../types/schemas"
 import type { GlassBounds } from "../utils/hooks"
+import { pageSizeOf } from "../utils/texture"
 
 export type GlassDisplacementProps = {
   /** The bounds of the element, updated outside of react */
@@ -151,8 +152,8 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
     const half = Math.min(w, h) / 2
     const u = material.uniforms
     u.uMap.value = texture
-    const image = texture.image as { width: number; height: number }
-    u.uTexSize.value.set(image.width, image.height)
+    const page = pageSizeOf(texture)
+    u.uTexSize.value.set(page.width, page.height)
     u.uSize.value.set(w, h)
     u.uRadius.value = Math.max(0, Math.min(borderRadius * drawn, w / 2, h / 2))
     u.uExp.value = cornerExponent

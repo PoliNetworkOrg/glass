@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react"
 import type { Mesh, Texture } from "three"
 import type { PlaneConfig } from "../types/schemas"
 import type { GlassBounds } from "../utils/hooks"
+import { pageSizeOf } from "../utils/texture"
 
 export type PlaneMeshProps = {
   /** The texture containing a screenshot of the document */
@@ -29,8 +30,8 @@ export function BGPlane(props: PlaneMeshProps) {
   // const texture = useTexture(props.texture)
 
   const getCoords = useCallback(() => {
-    const docw = document.documentElement.scrollWidth
-    const doch = document.documentElement.scrollHeight
+    // the plane is the page as it was when it was captured, which is where it is centered
+    const { width: docw, height: doch } = pageSizeOf(texture)
     const { width, height, left, top } = props.bounds.get()
 
     // calculating the offsets at each frame is actually more performant
@@ -41,7 +42,7 @@ export function BGPlane(props: PlaneMeshProps) {
     // read from the window and not from scroll events: where the page is pulled past its end (an overscroll) the
     // position can change without one
     return [window.scrollX - xoff, window.scrollY + yoff] as [number, number]
-  }, [props.bounds])
+  }, [props.bounds, texture])
 
   const updatePosition = useCallback(() => {
     if (plane.current) {
@@ -61,7 +62,7 @@ export function BGPlane(props: PlaneMeshProps) {
 
   return (
     <mesh ref={plane} name="glass-bg" position={[...getCoords(), -1000]}>
-      <planeGeometry args={[texture.width, texture.height]} />
+      <planeGeometry args={[pageSizeOf(texture).width, pageSizeOf(texture).height]} />
       <meshBasicMaterial map={texture} />
     </mesh>
   )

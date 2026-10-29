@@ -29,7 +29,7 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
  * ### Note
  * This hook ensures that if multiple updates are triggered in quick succession,
  * it will only perform the necessary updates to avoid redundant texture loads,
- * since calling {@link html2canvas} can be quite heavy.
+ * since capturing the page is the expensive part.
  *
  * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
  * @param blur Blur amount for the texture
@@ -43,7 +43,7 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
 
   const updateTexture = useCallback(async () => {
     secondRef.current = false // reset second update flag
-    promiseRef.current = getTexture(document.documentElement, blur) // start new texture promise
+    promiseRef.current = getTexture(blur) // start new texture promise
     const tex = await promiseRef.current // wait for texture to be ready
     promiseRef.current = null // clear current promise
 

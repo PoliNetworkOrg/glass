@@ -1,23 +1,25 @@
-import { toCanvas } from "html-to-image"
 import { CanvasTexture, type Texture } from "three"
+import { snapshot } from "./snapshot"
 
 /**
- * Screenshots the given HTML element and returns a Three.js texture.
- * @param element HTML Element to screenshot
- * @returns A Three.js {@link CanvasTexture} holding a screenshot of the element
+ * Takes a picture of the page and makes it a Three.js texture.
+ * @param blur Blur of the picture, in px
+ * @returns A Three.js {@link CanvasTexture} holding a picture of the page, see {@link pageSizeOf} for its size
  */
-export async function getTexture(element: HTMLElement, blur: number = 0): Promise<Texture> {
-  // const rand = Math.random().toString(36).substring(2, 7)
-  // console.time(`getTexture-${rand}`)
-  const canvas = await toCanvas(element, {
-    filter: (element) => element.tagName !== "CANVAS" && !element.hasAttribute?.("glass-ignore"),
-    width: element.scrollWidth,
-    height: element.scrollHeight,
-    quality: 0.95,
-    pixelRatio: 1,
-    includeQueryParams: true,
-    style: blur ? { filter: `blur(${blur}px)` } : undefined,
-  })
-  // console.timeEnd(`getTexture-${rand}`)
-  return new CanvasTexture(canvas)
+export async function getTexture(blur: number = 0): Promise<Texture> {
+  const { canvas, width, height } = await snapshot(blur)
+  const texture = new CanvasTexture(canvas)
+  texture.userData.page = { width, height }
+  return texture
+}
+
+/**
+ * The size of the page a texture shows, in CSS px. The picture itself is smaller where the page is bigger than a
+ * texture can be, so this and not the size of its image is what lines it up with the page.
+ */
+export function pageSizeOf(texture: Texture): { width: number; height: number } {
+  const page = texture.userData.page as { width: number; height: number } | undefined
+  if (page) return page
+  const image = texture.image as { width: number; height: number }
+  return { width: image.width, height: image.height }
 }
