@@ -20,7 +20,10 @@ export type GlassProps = {
   color: string
   /** Force reduce motion (disables 3D glass effect) */
   disable3D?: boolean
-  /** Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion */
+  /**
+   * Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion. A glass
+   * inside another glass is always the CSS one, see the README.
+   */
   force3D?: boolean
   /** Theme of the glass, which sets the light on its edges. By default it follows the color. */
   theme?: GlassTheme
@@ -79,7 +82,11 @@ export function Glass(props: GlassProps) {
   // a region of the page can opt out with data-glass-off, which is read when the glass comes into view
   const optedOut = useMemo(() => inView && Boolean(outer.current?.closest("[data-glass-off]")), [inView, outer])
   const capable = useGlassCapability()
+  // A glass inside another glass is the CSS one, even forced: the 3D glass bends the picture of the page, which has no
+  // glass in it, so it would show the page through its parent. The backdrop of the CSS glass is what is behind it,
+  // its parent included, which it blurs and tints as glass on glass does.
   const wants3D =
+    !nested &&
     enabled &&
     !optedOut &&
     inView &&

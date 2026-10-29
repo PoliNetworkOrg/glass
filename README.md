@@ -90,7 +90,11 @@ live numbers and moving glass to load it with.
 | `edge.shadow` | 0 – 1 | 1 | Strength of that shadow. |
 | `edge.presence` | 0 – 1 | 0 | A faint, tight shadow kept at every elevation, for glass that would read flat. |
 
-A glass inside another glass dims its shadow, which lands on a lighter surface.
+A glass inside another glass (a lens in a segmented control, a button on a panel) is always the CSS glass, `force3D` or
+not: the 3D glass bends the picture of the page, which has no glass in it, so nested it would show the page through its
+parent. The CSS glass blurs and tints what is really behind it, its parent included, which is what glass on glass looks
+like. Give it a lighter tint than its parent so it reads as a layer on it. Its shadow is dimmed, as it lands on a
+lighter surface.
 
 ### Refraction
 
