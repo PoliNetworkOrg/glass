@@ -456,6 +456,7 @@ const ELEMENT_CSS = `
 [data-glass-shell] {
   background: transparent !important; border-color: transparent !important; box-shadow: none !important;
   outline: none !important; transform: none !important; filter: none !important; backdrop-filter: none !important;
+  position: static !important;
   perspective: none !important; contain: none !important; clip-path: none !important; mask: none !important;
   will-change: auto !important;
 }
@@ -500,9 +501,11 @@ export async function snapshotElement(
 
   const [css] = await Promise.all([pageCss(false), copyState(el, copy)])
   for (const node of copy.querySelectorAll('script, noscript, style, link[rel~="stylesheet"]')) node.remove()
-  // where the picture is, and as big as the box, whatever the layout and the transforms of the page put on it
+  // Where the picture is, and as big as the box, whatever the layout and the transforms of the page put on it. Placed
+  // from the top left of the picture: its ancestors are all static, so that is what it is absolute to. Not fixed,
+  // which WebKit has been known to place wrong inside a foreignObject.
   copy.style.cssText +=
-    `;position: fixed !important; inset: auto !important; left: ${margin}px !important; top: ${margin}px !important;` +
+    `;position: absolute !important; inset: auto !important; left: ${margin}px !important; top: ${margin}px !important;` +
     ` width: ${width}px !important; height: ${height}px !important; margin: 0 !important; transform: none !important;` +
     " translate: none !important; scale: none !important; rotate: none !important;"
   const style = document.createElementNS(XHTML_NS, "style")
