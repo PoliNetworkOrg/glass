@@ -147,6 +147,8 @@ type Entry = {
   /** Counts its drawings, so that a backdrop with it in it knows to be drawn again */
   version: number
   overlay: Overlay | null
+  /** What is behind it, for the glass of a higher layer */
+  behind: Backdrop | null
 }
 
 type Glass = { target: GlassTarget; entry: Entry; state: GlassState }
@@ -166,7 +168,6 @@ class GlassRenderer {
   private composite!: Program
   private readonly textures = new Map<Snapshot, WebGLTexture>()
   private readonly entries = new Map<GlassTarget, Entry>()
-  private readonly backdrops = new Map<number, Backdrop>()
   private readonly contexts = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D | null>()
   private readonly snapshotIds = new WeakMap<Snapshot, number>()
   private nextSnapshotId = 0
@@ -201,9 +202,9 @@ class GlassRenderer {
     canvas.addEventListener("webglcontextrestored", () => {
       // everything that was on the GPU is gone with it
       this.textures.clear()
-      this.backdrops.clear()
       for (const entry of this.entries.values()) {
         entry.output = null
+        entry.behind = null
         if (entry.overlay) {
           entry.overlay.texture = null
           entry.overlay.uploaded = false
@@ -233,6 +234,7 @@ class GlassRenderer {
       generation: -1,
       version: 0,
       overlay: null,
+      behind: null,
     })
     this.stop ??= drawFrames((time) => this.draw(time))
     return () => {
@@ -248,9 +250,10 @@ class GlassRenderer {
 
   private free(entry: Entry) {
     const gl = this.gl
-    if (entry.output) {
-      gl.deleteFramebuffer(entry.output.fbo)
-      gl.deleteTexture(entry.output.texture)
+    for (const target of [entry.output, entry.behind]) {
+      if (!target) continue
+      gl.deleteFramebuffer(target.fbo)
+      gl.deleteTexture(target.texture)
     }
     if (entry.overlay) {
       entry.overlay.disconnect()
@@ -383,10 +386,13 @@ class GlassRenderer {
   }
 
   /**
-   * What is behind the glass of `layer`, drawn for the region of the screen it covers, or null where none of the glass
-   * below is in that region, and the glass bends the picture of the page as layer 0 does.
+   * What is behind a glass of a higher layer, drawn for the region of the screen it covers, or null where none of the
+   * glass below is in that region, and the glass bends the picture of the page as layer 0 does. Each glass has its
+   * own: a fixed header and a fixed tab bar together would cover the whole screen, drawn again on every frame of a
+   * scroll, and on their own they cover two strips of it.
    */
-  private backdrop(layer: number, members: Glass[], below: Glass[], scrollX: number, scrollY: number) {
+  private backdrop(glass: Glass, below: Glass[], scrollX: number, scrollY: number) {
+    const members = [glass]
     // the region: where the glass of the layer is on the screen, and as far around it as its frost reaches
     let x0 = Number.POSITIVE_INFINITY
     let y0 = Number.POSITIVE_INFINITY
@@ -431,14 +437,14 @@ class GlassRenderer {
       ...under.map(({ entry, state }, i) => `${entry.version} ${state.key} ${state.center} ${overlays[i].version}`),
     ].join("|")
 
-    const current = this.backdrops.get(layer)
+    const current = glass.entry.behind
     const backdrop: Backdrop = {
       ...this.target(current ?? null, rw, rh, false),
       key: current?.key ?? "",
       region,
     }
     if (current && backdrop.fbo !== current.fbo) backdrop.key = ""
-    this.backdrops.set(layer, backdrop)
+    glass.entry.behind = backdrop
     if (backdrop.key === key) return backdrop
     backdrop.key = key
 
@@ -579,9 +585,9 @@ class GlassRenderer {
     const below: Glass[] = []
     for (const layer of layers) {
       const members = glasses.filter(({ state }) => state.layer === layer)
-      const backdrop = below.length > 0 ? this.backdrop(layer, members, below, scrollX, scrollY) : null
       for (const glass of members) {
         const { entry, state } = glass
+        const backdrop = below.length > 0 ? this.backdrop(glass, below, scrollX, scrollY) : null
         const same =
           entry.generation === this.generation &&
           entry.key === state.key &&
