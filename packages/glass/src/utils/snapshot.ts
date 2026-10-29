@@ -447,6 +447,10 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
  * What the ancestors of an element are made of in the picture of the element: their classes and attributes, for the
  * selectors and the inheritance of its style, and nothing of their own (no background, no box, no effect) to be seen
  * around it. Its shadow, which the glass casts below itself, and its canvas, which the renderer draws, are left out.
+ *
+ * No backdrop filter either: what is behind the glass inside it (a button on a panel) is the canvas of the panel, left
+ * out, so there is nothing to filter, and WebKit doesn't paint an element with one in an SVG image at all, which left
+ * the CSS glass of buttons and switches out of what the layers above see on iOS.
  */
 const ELEMENT_CSS = `
 [data-glass-shell] {
@@ -457,6 +461,7 @@ const ELEMENT_CSS = `
 }
 [data-glass-shell]::before, [data-glass-shell]::after { display: none !important; }
 ._polinetwork_glass-drop, ._polinetwork_glass-ring, canvas { visibility: hidden !important; }
+* { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 `
 
 /**
