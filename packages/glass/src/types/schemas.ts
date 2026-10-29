@@ -1,8 +1,10 @@
 import { z } from "zod"
 
-export const PlaneSchema = z.object({
-  blur: z.number().min(0).max(100).default(0).meta({ description: "Blur amount for the background plane." }),
-})
+export const PlaneSchema = z
+  .object({
+    blur: z.number().min(0).max(100).default(0).meta({ description: "Blur amount for the background plane." }),
+  })
+  .default({ blur: 0 })
 
 export const ShapeSchema = z
   .object({

@@ -4,6 +4,7 @@ import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
+import type { GlassPreset } from "./presets"
 import { type SceneConfig, SceneConfigSchema } from "./types/schemas"
 import { useGlassCapability } from "./utils/capability"
 import { useComputedStyle, useIncreasedContrast, useInView, useMotionBounds } from "./utils/hooks"
@@ -13,8 +14,8 @@ import { isColored, themeFromColor } from "./utils/theme"
 
 export type GlassProps = {
   children: React.ReactNode
-  /** The configuration of the glass, or a preset */
-  options: Partial<SceneConfig>
+  /** The configuration of the glass, or a preset: what it leaves out has its default */
+  options: GlassPreset | Partial<SceneConfig>
   /** Color of the glass */
   color: string
   /** Force reduce motion (disables 3D glass effect) */
