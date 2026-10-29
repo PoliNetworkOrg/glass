@@ -125,13 +125,9 @@ of the rim and no `ior` or `thickness` made it follow this profile.
 ## Things to know
 
 - The shadow reaches outside of the glass, so a parent that clips overflow (`overflow: hidden`) cuts it off.
-- Where the browser bounces the page when it is pulled past its end (Firefox, Safari), it does it on its own and the
-  page isn't told: no scroll position, offset or element position changes (measured in Firefox), so the canvas can't
-  follow it. The glass sees what starts it instead, continuous wheel or touch input pushing past the end of the page
-  (not a notched wheel, and not over something that can still scroll), and for that gesture and the 0.8s the bounce
-  takes to settle it fades to the CSS glass, whose backdrop the browser keeps in step. If a browser does report the
-  overscroll in the scroll position (Safari can go below 0) the canvas follows it and this stays off. Or turn the
-  bounce off: `html { overscroll-behavior: none; }`.
+- Where the browser bounces the page when it is pulled past its end and doesn't say so in the scroll position
+  (Firefox), the picture in the 3D glass stays where it is while the page bounces. Safari does say so, and there the
+  glass follows the bounce. To turn the bounce off: `html { overscroll-behavior: none; }`.
 - `corner-shape` isn't supported everywhere yet, where it isn't the corners are round.
 - The 3D glass shows the page as it was captured, so what changes under it (a video, an animation, a hover) isn't
   reflected until the next capture. Canvases, videos, iframes and the scroll of inner scrollers aren't in the capture.
