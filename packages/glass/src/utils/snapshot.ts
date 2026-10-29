@@ -104,22 +104,27 @@ function measureViewport(): ViewportUnits {
   return units
 }
 
+/**
+ * Viewport units in declarations turned into px. Only in declarations: a selector can hold what reads like one, as
+ * Tailwind's `.h-\[72vh\]` does, and rewritten it would no longer match its class.
+ */
 function fixViewport(css: string) {
-  return css
-    .replace(VIEWPORT_RE, (_, n: string, prefix: Prefix | undefined, unit: string) => {
-      const [vw, vh] = viewport[prefix ?? ""]
-      const per =
-        unit === "vw" || unit === "vi"
-          ? vw
-          : unit === "vh" || unit === "vb"
-            ? vh
-            : unit === "vmin"
-              ? Math.min(vw, vh)
-              : Math.max(vw, vh)
-      return `${Number(n) * per}px`
-    })
-    .replace(/:root\b/g, ":is(:root, html)")
+  return css.replace(VIEWPORT_RE, (_, n: string, prefix: Prefix | undefined, unit: string) => {
+    const [vw, vh] = viewport[prefix ?? ""]
+    const per =
+      unit === "vw" || unit === "vi"
+        ? vw
+        : unit === "vh" || unit === "vb"
+          ? vh
+          : unit === "vmin"
+            ? Math.min(vw, vh)
+            : Math.max(vw, vh)
+    return `${Number(n) * per}px`
+  })
 }
+
+/** A selector of the page as the picture needs it: `:root` is its <svg>, so rules on `:root` match the copy of <html> too */
+const fixSelector = (selector: string) => selector.replace(/:root\b/g, ":is(:root, html)")
 
 /** The first source of a font, which is the one the browser would use: the rest are copies in other formats */
 function firstSource(rule: CSSFontFaceRule) {
@@ -154,10 +159,51 @@ function rulesText(rules: CSSRuleList, fonts: Set<string>): string {
       const key = `${normalizeFamily(rule.style.getPropertyValue("font-family"))}|${normalizeRange(rule.style.getPropertyValue("unicode-range"))}`
       if (fonts.has(key)) text += `${firstSource(rule)}\n`
     } else {
-      text += `${rule.cssText}\n`
+      text += `${ruleText(rule, fonts)}\n`
     }
   }
   return text
+}
+
+/**
+ * Media queries, decided on the page. The picture is an SVG image with its own media: it is as wide as everything on
+ * the page and has no scrollbar, so a window just past a breakpoint by less than its scrollbar is under it in the
+ * picture, and the picture is laid out for another screen (a gallery of one column for one of two). Each `@media` is
+ * asked of the page instead, and what holds goes in as it is, without the query.
+ */
+const mediaLists = new Map<string, MediaQueryList>()
+function mediaMatches(query: string) {
+  if (!query || query === "all") return true
+  let list = mediaLists.get(query)
+  if (!list) {
+    list = window.matchMedia(query)
+    mediaLists.set(query, list)
+  }
+  return list.matches
+}
+/** What the media queries met so far say now: when it changes, the CSS made with them is out of date */
+const mediaKey = () => [...mediaLists.values()].map((list) => (list.matches ? 1 : 0)).join("")
+
+/** What comes before the block of a rule: its selector, or its `@media (...)` */
+const prelude = (rule: CSSRule) => rule.cssText.slice(0, rule.cssText.indexOf("{")).trim()
+
+/** A rule with the viewport units of its declarations turned into px, and those of the rules inside it */
+function ruleText(rule: CSSRule, fonts: Set<string>): string {
+  if (rule instanceof CSSStyleRule) {
+    // a style rule can hold nested rules too
+    const nested = rule.cssRules.length > 0 ? rulesText(rule.cssRules, fonts) : ""
+    return `${fixSelector(rule.selectorText)} { ${fixViewport(rule.style.cssText)} ${nested}}`
+  }
+  if (rule instanceof CSSKeyframesRule) {
+    const frames = [...rule.cssRules].map((frame) =>
+      frame instanceof CSSKeyframeRule ? `${frame.keyText} { ${fixViewport(frame.style.cssText)} }` : frame.cssText
+    )
+    return `${prelude(rule)} { ${frames.join(" ")} }`
+  }
+  if (rule instanceof CSSMediaRule) return mediaMatches(rule.media.mediaText) ? rulesText(rule.cssRules, fonts) : ""
+  // @supports, @layer, @container: their prelude as it is
+  if (rule instanceof CSSGroupingRule) return `${prelude(rule)} {\n${rulesText(rule.cssRules, fonts)}}`
+  return rule.cssText
 }
 
 function safeRules(sheet: CSSStyleSheet, fonts: Set<string>) {
@@ -175,14 +221,14 @@ const fetched = new Map<string, Promise<string>>()
 const prepared = new WeakMap<CSSStyleSheet, { key: string; css: Promise<string> }>()
 
 function prepare(sheet: CSSStyleSheet, fonts: Set<string>, fontsKey: string): Promise<string> {
-  if (sheet.disabled) return Promise.resolve("")
+  if (sheet.disabled || !mediaMatches(sheet.media.mediaText)) return Promise.resolve("")
   let rules: CSSRuleList | null = null
   try {
     rules = sheet.cssRules
   } catch {
     /* another origin's */
   }
-  const key = `${rules?.length ?? "x"}|${fontsKey}|${JSON.stringify(viewport)}`
+  const key = `${rules?.length ?? "x"}|${fontsKey}|${JSON.stringify(viewport)}|${mediaKey()}`
   const cached = prepared.get(sheet)
   if (cached?.key === key) return cached.css
 
@@ -198,11 +244,13 @@ function prepare(sheet: CSSStyleSheet, fonts: Set<string>, fontsKey: string): Pr
         .catch(() => "")
       fetched.set(href, text)
     }
-    raw = text
+    // without its rules there is no telling a selector from a declaration: a sheet another origin hosts is hardly
+    // made of utility classes, and is rewritten whole
+    raw = text.then((css) => fixSelector(fixViewport(css)))
   } else raw = Promise.resolve("")
 
-  // the viewport units first: the data urls could hold something that reads like one
-  const css = raw.then((text) => inlineUrls(fixViewport(text), base))
+  // the urls after the viewport units: the data urls could hold something that reads like one
+  const css = raw.then((text) => inlineUrls(text, base))
   prepared.set(sheet, { key, css })
   return css
 }
