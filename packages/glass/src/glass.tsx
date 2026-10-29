@@ -58,7 +58,9 @@ export function Glass(props: GlassProps) {
     claimTouch = false,
     ...rest
   } = props
-  const scene = SceneConfigSchema.parse(options)
+  // parsed again only when the options change, not each time the parent renders: a new scene is a new draw
+  const optionsKey = JSON.stringify(options)
+  const scene = useMemo(() => SceneConfigSchema.parse(JSON.parse(optionsKey)), [optionsKey])
   const { texture, enabled, want } = useGlass()
   const nested = useContext(GlassNestContext)
 

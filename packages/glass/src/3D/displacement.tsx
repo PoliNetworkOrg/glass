@@ -1,9 +1,9 @@
-import { invalidate } from "@react-three/fiber"
-import { type MotionValue, useMotionValueEvent } from "motion/react"
-import { useLayoutEffect, useMemo, useRef } from "react"
-import { type Mesh, ShaderMaterial, type Texture, Vector2 } from "three"
+import { useStore, useThree } from "@react-three/fiber"
+import type { MotionValue } from "motion/react"
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { type Mesh, type OrthographicCamera, ShaderMaterial, type Texture, Vector2 } from "three"
 import type { ShapeConfig } from "../types/schemas"
-import type { GlassBounds } from "../utils/hooks"
+import { drawFrames, frameScroll, type GlassBounds } from "../utils/hooks"
 import { pageSizeOf } from "../utils/texture"
 
 export type GlassDisplacementProps = {
@@ -121,6 +121,8 @@ const FRAGMENT = /* glsl */ `
 export function GlassDisplacement(props: GlassDisplacementProps) {
   const { bounds, borderRadius, cornerExponent, shape, frost, texture } = props
   const mesh = useRef<Mesh>(null)
+  const get = useThree((state) => state.get)
+  const store = useStore()
 
   const material = useMemo(
     () =>
@@ -143,48 +145,75 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
       }),
     []
   )
-
-  const sync = () => {
-    const { width: w, height: h, layoutWidth, layoutHeight } = bounds.get()
-    if (w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return
-    // the element can be drawn bigger or smaller than its box (a press, a stretch), and its corners with it
-    const drawn = (w / layoutWidth + h / layoutHeight) / 2
-    const half = Math.min(w, h) / 2
-    const u = material.uniforms
-    u.uMap.value = texture
-    const page = pageSizeOf(texture)
-    u.uTexSize.value.set(page.width, page.height)
-    u.uSize.value.set(w, h)
-    u.uRadius.value = Math.max(0, Math.min(borderRadius * drawn, w / 2, h / 2))
-    u.uExp.value = cornerExponent
-    // the profile was measured on small controls, where 25px of shift is a lot: a bigger surface bends over a wider
-    // band and further, as real glass does, so both grow with the shortest side past the size they were fitted at
-    const grow = Math.max(1, (half * 2) / FITTED_SIZE) ** shape.scaling
-    // a surface smaller than two bezels is all bend: the bezel shrinks to fit, and the shift stops at the middle
-    u.uBezel.value = Math.max(1, Math.min(shape.bezel * grow, half))
-    u.uShift.value = Math.max(0, Math.min(shape.shift * grow, half))
-    u.uCurve.value = shape.curve
-    u.uDispersion.value = shape.dispersion
-    u.uFrost.value = frost
-    mesh.current?.scale.set(w, h, 1)
-    invalidate()
-  }
-
-  useLayoutEffect(sync, [bounds, borderRadius, cornerExponent, shape, frost, texture, material])
-  useMotionValueEvent(bounds, "change", sync)
   useLayoutEffect(() => () => material.dispose(), [material])
 
+  // R3F sizes the canvas too, when it measures it, and a resized canvas is cleared: it is drawn again right away, or it
+  // would show empty until the next change
+  useEffect(
+    () =>
+      store.subscribe((state, prev) => {
+        if (state.size !== prev.size) state.gl.render(state.scene, state.camera)
+      }),
+    [store]
+  )
+
+  // Drawn by the frame loop of the glass, right after it has read where the element and the page are, and only when
+  // one of them moved or the glass changed. A new registration (the props changed) draws on its first frame.
+  useEffect(() => {
+    let last = ""
+    return drawFrames(() => {
+      const { width: w, height: h, layoutWidth, layoutHeight, left, top } = bounds.get()
+      if (w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return
+      // where the page is, from the center of the glass: the picture is centered on the page as it was captured
+      const page = pageSizeOf(texture)
+      const bgX = frameScroll.x - (left + w / 2 - page.width / 2)
+      const bgY = frameScroll.y + (top + h / 2 - page.height / 2)
+      const key = `${w} ${h} ${layoutWidth} ${layoutHeight} ${bgX} ${bgY}`
+      if (key === last) return
+      last = key
+
+      // the element can be drawn bigger or smaller than its box (a press, a stretch), and its corners with it
+      const drawn = (w / layoutWidth + h / layoutHeight) / 2
+      const half = Math.min(w, h) / 2
+      const u = material.uniforms
+      u.uMap.value = texture
+      u.uTexSize.value.set(page.width, page.height)
+      u.uBg.value.set(bgX, bgY)
+      u.uSize.value.set(w, h)
+      u.uRadius.value = Math.max(0, Math.min(borderRadius * drawn, w / 2, h / 2))
+      u.uExp.value = cornerExponent
+      // the profile was measured on small controls, where 25px of shift is a lot: a bigger surface bends over a wider
+      // band and further, as real glass does, so both grow with the shortest side past the size they were fitted at
+      const grow = Math.max(1, (half * 2) / FITTED_SIZE) ** shape.scaling
+      // a surface smaller than two bezels is all bend: the bezel shrinks to fit, and the shift stops at the middle
+      u.uBezel.value = Math.max(1, Math.min(shape.bezel * grow, half))
+      u.uShift.value = Math.max(0, Math.min(shape.shift * grow, half))
+      u.uCurve.value = shape.curve
+      u.uDispersion.value = shape.dispersion
+      u.uFrost.value = frost
+      mesh.current?.scale.set(w, h, 1)
+
+      // The canvas is the size of the box of the element and is drawn on screen by the element's transform (a press
+      // scales it), so what it shows is lined up with the page by a view as big as the element is drawn, which makes a
+      // unit of the scene a pixel of the screen. Resizing a canvas clears it, so it is drawn right after.
+      const state = get()
+      const camera = state.camera as OrthographicCamera
+      if (camera.right !== w / 2 || camera.top !== h / 2) {
+        camera.left = -w / 2
+        camera.right = w / 2
+        camera.top = h / 2
+        camera.bottom = -h / 2
+        camera.updateProjectionMatrix()
+      }
+      if (state.size.width !== layoutWidth || state.size.height !== layoutHeight) {
+        // which draws it, see above
+        state.setSize(layoutWidth, layoutHeight, state.size.top, state.size.left)
+      } else state.gl.render(state.scene, state.camera)
+    })
+  }, [bounds, borderRadius, cornerExponent, shape, frost, texture, material, get])
+
   return (
-    <mesh
-      ref={mesh}
-      material={material}
-      frustumCulled={false}
-      onBeforeRender={(_renderer, scene) => {
-        // where the background plane is, which moves with the scroll
-        const bg = scene.getObjectByName("glass-bg")
-        if (bg) material.uniforms.uBg.value.set(bg.position.x, bg.position.y)
-      }}
-    >
+    <mesh ref={mesh} material={material} frustumCulled={false}>
       <planeGeometry args={[1, 1]} />
     </mesh>
   )

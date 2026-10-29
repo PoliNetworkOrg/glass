@@ -1,4 +1,4 @@
-import { CanvasTexture, type Texture } from "three"
+import { CanvasTexture, SRGBColorSpace, type Texture } from "three"
 import { snapshot } from "./snapshot"
 
 /**
@@ -9,6 +9,9 @@ import { snapshot } from "./snapshot"
 export async function getTexture(blur: number = 0): Promise<Texture> {
   const { canvas, width, height } = await snapshot(blur)
   const texture = new CanvasTexture(canvas)
+  // the page is in sRGB: the glass blurs it in linear light, and the renderer puts it back (R3F only marks the textures
+  // it is handed as a `map` by itself)
+  texture.colorSpace = SRGBColorSpace
   texture.userData.page = { width, height }
   return texture
 }

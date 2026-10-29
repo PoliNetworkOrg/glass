@@ -133,10 +133,19 @@ const pageSize = () => `${document.documentElement.scrollWidth}x${document.docum
 type Watcher = () => (() => void) | undefined
 
 const watchers = new Set<Watcher>()
+const drawers = new Set<() => void>()
 let frame = 0
+
+/**
+ * Where the page is scrolled, read once at the start of each frame for every glass. It is read from the window and not
+ * from scroll events: where the page is pulled past its end (an overscroll) it can change without one.
+ */
+export const frameScroll = { x: 0, y: 0 }
 
 function tick() {
   frame = requestAnimationFrame(tick)
+  frameScroll.x = window.scrollX
+  frameScroll.y = window.scrollY
   // everything is read before anything is written, so a glass that redraws doesn't force a layout for the next one
   const commits: (() => void)[] = []
   for (const read of watchers) {
@@ -144,6 +153,19 @@ function tick() {
     if (commit) commits.push(commit)
   }
   for (const commit of commits) commit()
+  // and drawn in the same frame, from what was just read: a glass drawn on the next one would be a frame behind
+  for (const draw of drawers) draw()
+}
+
+function startLoop() {
+  if (!frame) frame = requestAnimationFrame(tick)
+}
+
+function stopLoopIfIdle() {
+  if (watchers.size === 0 && drawers.size === 0) {
+    cancelAnimationFrame(frame)
+    frame = 0
+  }
 }
 
 /**
@@ -152,13 +174,23 @@ function tick() {
  */
 function watchFrames(read: Watcher) {
   watchers.add(read)
-  if (!frame) frame = requestAnimationFrame(tick)
+  startLoop()
   return () => {
     watchers.delete(read)
-    if (watchers.size === 0) {
-      cancelAnimationFrame(frame)
-      frame = 0
-    }
+    stopLoopIfIdle()
+  }
+}
+
+/**
+ * Calls `draw` on every frame, after every watcher has read and committed, so it draws where the page and the
+ * elements are in this frame. It shares the loop of {@link watchFrames}.
+ */
+export function drawFrames(draw: () => void) {
+  drawers.add(draw)
+  startLoop()
+  return () => {
+    drawers.delete(draw)
+    stopLoopIfIdle()
   }
 }
 
@@ -168,7 +200,7 @@ function watchFrames(read: Watcher) {
  */
 export type GlassBounds = RectReadOnly & { layoutWidth: number; layoutHeight: number }
 
-const boundsOf = (el: HTMLElement, rect: DOMRect): GlassBounds => ({
+const boundsOf = (rect: DOMRect, layoutWidth: number, layoutHeight: number): GlassBounds => ({
   x: rect.x,
   y: rect.y,
   width: rect.width,
@@ -177,8 +209,8 @@ const boundsOf = (el: HTMLElement, rect: DOMRect): GlassBounds => ({
   right: rect.right,
   bottom: rect.bottom,
   left: rect.left,
-  layoutWidth: el.offsetWidth,
-  layoutHeight: el.offsetHeight,
+  layoutWidth,
+  layoutHeight,
 })
 
 const sameRect = (a: RectReadOnly, b: DOMRect) =>
@@ -195,7 +227,7 @@ const sameRect = (a: RectReadOnly, b: DOMRect) =>
  *
  * It accounts for visual viewport offsets and updates on resize and scroll events. The rectangle is where the
  * element is drawn, transforms included, and a transform (a press, a transition, an animation) fires none of those
- * events, so while `watch` is true the rectangle is also read on every frame, and only changes when it moved.
+ * events, so while `watch` is true the rectangle is read on every frame instead, and only changes when it moved.
  * @see https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport
  *
  * _The DOM is the biggest threat to performance yet again_
@@ -223,9 +255,14 @@ export function useMotionBounds(watch = false) {
   useEffect(() => {
     const updatePosition = () => {
       if (ref.current) {
-        motionValues.set(boundsOf(ref.current, ref.current.getBoundingClientRect()))
+        motionValues.set(
+          boundsOf(ref.current.getBoundingClientRect(), ref.current.offsetWidth, ref.current.offsetHeight)
+        )
       }
     }
+    updatePosition()
+    // while it is watched every frame reads it, and the events would only read it again
+    if (watch) return
 
     // everything that counld change the element's position or size
     const observer = new ResizeObserver(updatePosition)
@@ -245,7 +282,7 @@ export function useMotionBounds(watch = false) {
       window.visualViewport?.removeEventListener("scroll", updatePosition)
       window.visualViewport?.removeEventListener("resize", updatePosition)
     }
-  }, [ref.current])
+  }, [ref.current, watch])
 
   useEffect(() => {
     if (!watch) return
@@ -254,7 +291,8 @@ export function useMotionBounds(watch = false) {
       if (!el) return
       const rect = el.getBoundingClientRect()
       if (sameRect(motionValues.get(), rect)) return
-      return () => motionValues.set(boundsOf(el, rect))
+      const bounds = boundsOf(rect, el.offsetWidth, el.offsetHeight)
+      return () => motionValues.set(bounds)
     })
   }, [watch, motionValues])
 
