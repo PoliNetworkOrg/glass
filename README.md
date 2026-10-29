@@ -2,7 +2,7 @@
 apple could never
 
 Liquid glass for the web: the page behind an element is captured as a texture and bent at the edges of the glass by a
-displacement profile fitted to Apple's Liquid Glass (WebGL, with Three.js), with a CSS version where that can't be used.
+displacement profile fitted to Apple's Liquid Glass (WebGL2), with a CSS version where that can't be used.
 
 ```tsx
 import { Glass, GlassProvider, glassPresets, glassTints } from "@polinetwork/glass"
@@ -110,7 +110,14 @@ of the rim and no `ior` or `thickness` made it follow this profile.
   inlined once and kept. The page is only captured while some glass is drawn in 3D, so a page whose glass is all CSS
   never pays for it. One capture runs at a time, with a frame drawn between two of them, so while a window is resized
   the glass follows it at about a capture a frame without holding the page's frames back.
-- **On screen only.** A glass gets its WebGL canvas when it comes within 200px of the screen and loses it when it leaves.
+- **One renderer.** All the glass on the page is drawn by a single WebGL2 context, which holds the picture of the page
+  on the GPU once and uploads it once per capture. Each frame the glasses that changed are drawn side by side on its
+  canvas, which is taken as one bitmap and copied, a piece to each, to the canvas the glass shows. A context per glass
+  held a copy of the picture each and ran into the browser's cap on contexts (16 in Chrome, past which the oldest are
+  dropped); with one, 24 glasses on a 1280x6000 page cost about 0.5ms a frame in Chrome. In Firefox, which reads the
+  bitmap back to the CPU, it is about 4ms a frame for one glass and 12ms for 16 while they move, and nothing while they
+  don't.
+- **On screen only.** A glass draws when it comes within 200px of the screen and stops when it leaves.
 - **Device check.** The first time glass is used the device is measured when the browser is idle (a WebGL2 context that
   refuses software renderers, then a few frames of a workload shaped like the glass), and the verdict is kept in
   `localStorage`. Until it is known, and where it is a no, the CSS glass is used. `force3D` skips it.

@@ -1,5 +1,5 @@
 import { useReducedMotion } from "motion/react"
-import { Suspense, useContext, useEffect, useMemo } from "react"
+import { useContext, useEffect, useMemo } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
 import { GlassNestContext, useGlass } from "./context"
@@ -60,7 +60,7 @@ export function Glass(props: GlassProps) {
   // parsed again only when the options change, not each time the parent renders: a new scene is a new draw
   const optionsKey = JSON.stringify(options)
   const scene = useMemo(() => SceneConfigSchema.parse(JSON.parse(optionsKey)), [optionsKey])
-  const { texture, enabled, want, scrollLead } = useGlass()
+  const { snapshot, enabled, want, scrollLead } = useGlass()
   const nested = useContext(GlassNestContext)
 
   const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
@@ -83,7 +83,7 @@ export function Glass(props: GlassProps) {
     !optedOut &&
     inView &&
     ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || Boolean(force3D))
-  const do3D = wants3D && texture
+  const do3D = wants3D && snapshot
 
   // the page is captured only while some glass is going to draw it
   useEffect(() => (wants3D ? want() : undefined), [wants3D, want])
@@ -150,9 +150,7 @@ export function Glass(props: GlassProps) {
       >
         {do3D ? (
           <>
-            <Suspense fallback={<GlassFallback {...commonProps} />}>
-              <Glass3D {...commonProps} texture={texture} scrollLead={scrollLead} />
-            </Suspense>
+            <Glass3D {...commonProps} snapshot={snapshot} scrollLead={scrollLead} />
             {scene.tint.opacity > 0 && (
               <div
                 className="_polinetwork_glass-tint"

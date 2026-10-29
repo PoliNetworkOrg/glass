@@ -1,8 +1,8 @@
 import { useMotionValue } from "motion/react"
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import type { RectReadOnly } from "react-use-measure"
-import type { Texture } from "three"
-import { getTexture } from "./texture"
+import { releaseSnapshot } from "../3D/renderer"
+import { watchFrames } from "./frames"
+import { type Snapshot, snapshot } from "./snapshot"
 
 /**
  * React hook to handle async initializers
@@ -30,8 +30,8 @@ const LOAD_SETTLE_MS = 150
 const afterNextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
 
 /**
- *  # useBackgroundTexture
- * React hook to load and update the background texture based on the document element.
+ *  # usePageSnapshot
+ * React hook to capture the page, and capture it again when it changes.
  *
  * The page is captured again when `deps` or `blur` change, when it changes size, and when an image or a font
  * finishes loading, since the capture before it was taken without them.
@@ -41,13 +41,13 @@ const afterNextFrame = () => new Promise<void>((resolve) => requestAnimationFram
  * while the page keeps changing (a window being resized) it is captured about once a frame, and each one is shown,
  * since it is newer than the one on screen.
  *
- * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
- * @param blur Blur amount for the texture
- * @param enabled When false nothing is captured, which is the expensive part, and there is no texture
- * @returns The current background texture, or null if not yet loaded
+ * @param deps The dependency array for the picture to be considered out of date, passed to {@link useEffect}
+ * @param blur Blur amount for the picture
+ * @param enabled When false nothing is captured, which is the expensive part, and there is no picture
+ * @returns The current picture of the page, or null if not yet captured
  */
-export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, enabled: boolean = true): Texture | null {
-  const [texture, setTexture] = useState<Texture | null>(null)
+export function usePageSnapshot(deps: unknown[] = [], blur: number = 0, enabled: boolean = true): Snapshot | null {
+  const [picture, setPicture] = useState<Snapshot | null>(null)
   const blurRef = useRef(blur)
   blurRef.current = blur
 
@@ -79,12 +79,11 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
         state.again = false
         state.size = pageSize()
         try {
-          const next = await getTexture(blurRef.current)
-          // a capture that ended after the texture was turned off is thrown away
-          if (state.on) setTexture(next)
-          else next.dispose()
+          const next = await snapshot(blurRef.current)
+          // a capture that ended after the glass was turned off is thrown away
+          if (state.on) setPicture(next)
         } catch {
-          /* the page couldn't be drawn, the glass keeps the texture it had */
+          /* the page couldn't be drawn, the glass keeps the picture it had */
         }
         if (state.again) await afterNextFrame()
       } while (state.again && state.on)
@@ -110,7 +109,7 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
 
   useEffect(() => {
     if (!enabled) {
-      setTexture(null)
+      setPicture(null)
       return
     }
     capturer.start()
@@ -133,83 +132,35 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
 
   useEffect(() => capturer.schedule(), [capturer, blur, ...deps])
 
-  // a texture is the whole page, so the one that was replaced has to be freed, or each capture leaves one on the GPU
-  useEffect(() => () => texture?.dispose(), [texture])
+  // a picture is the whole page, so the one that was replaced has to be freed, or each capture leaves one on the GPU
+  useEffect(
+    () => () => {
+      if (picture) releaseSnapshot(picture)
+    },
+    [picture]
+  )
 
-  return texture
+  return picture
 }
 
 const pageSize = () => `${document.documentElement.scrollWidth}x${document.documentElement.scrollHeight}`
-
-type Watcher = () => (() => void) | undefined
-
-const watchers = new Set<Watcher>()
-const drawers = new Set<(time: number) => void>()
-let frame = 0
-
-/**
- * Where the page is scrolled, read once at the start of each frame for every glass. It is read from the window and not
- * from scroll events: where the page is pulled past its end (an overscroll) it can change without one.
- */
-export const frameScroll = { x: 0, y: 0 }
-
-function tick(time: number) {
-  frame = requestAnimationFrame(tick)
-  frameScroll.x = window.scrollX
-  frameScroll.y = window.scrollY
-  // everything is read before anything is written, so a glass that redraws doesn't force a layout for the next one
-  const commits: (() => void)[] = []
-  for (const read of watchers) {
-    const commit = read()
-    if (commit) commits.push(commit)
-  }
-  for (const commit of commits) commit()
-  // and drawn in the same frame, from what was just read: a glass drawn on the next one would be a frame behind
-  for (const draw of drawers) draw(time)
-}
-
-function startLoop() {
-  if (!frame) frame = requestAnimationFrame(tick)
-}
-
-function stopLoopIfIdle() {
-  if (watchers.size === 0 && drawers.size === 0) {
-    cancelAnimationFrame(frame)
-    frame = 0
-  }
-}
-
-/**
- * Calls `read` on every frame, and the function it returns, if it does, after all the other watchers have read.
- * All of them share one animation frame loop, which only runs while there is one.
- */
-function watchFrames(read: Watcher) {
-  watchers.add(read)
-  startLoop()
-  return () => {
-    watchers.delete(read)
-    stopLoopIfIdle()
-  }
-}
-
-/**
- * Calls `draw` on every frame, after every watcher has read and committed, so it draws where the page and the
- * elements are in this frame. It shares the loop of {@link watchFrames}.
- */
-export function drawFrames(draw: (time: number) => void) {
-  drawers.add(draw)
-  startLoop()
-  return () => {
-    drawers.delete(draw)
-    stopLoopIfIdle()
-  }
-}
 
 /**
  * The rectangle of an element as it is drawn (transforms included), and the size of its box before them: the
  * canvas of a glass has the second and draws the first.
  */
-export type GlassBounds = RectReadOnly & { layoutWidth: number; layoutHeight: number }
+export type GlassBounds = {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+  readonly left: number
+  readonly layoutWidth: number
+  readonly layoutHeight: number
+}
 
 const boundsOf = (rect: DOMRect, layoutWidth: number, layoutHeight: number): GlassBounds => ({
   x: rect.x,
@@ -224,7 +175,7 @@ const boundsOf = (rect: DOMRect, layoutWidth: number, layoutHeight: number): Gla
   layoutHeight,
 })
 
-const sameRect = (a: RectReadOnly, b: DOMRect) =>
+const sameRect = (a: GlassBounds, b: DOMRect) =>
   Math.abs(a.x - b.x) < 0.01 &&
   Math.abs(a.y - b.y) < 0.01 &&
   Math.abs(a.width - b.width) < 0.01 &&
