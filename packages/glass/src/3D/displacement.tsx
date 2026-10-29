@@ -169,10 +169,12 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
     return drawFrames(() => {
       const { width: w, height: h, layoutWidth, layoutHeight, left, top } = bounds.get()
       if (w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return
-      // where the page is, from the center of the glass: the picture is centered on the page as it was captured
+      // Where the center of the page is, from the center of the glass, in the scene (y up). The center of the glass is
+      // at scroll + left + w / 2 on the page, so the page's center is that much to its left, and the same distance
+      // above it. The two come out with opposite signs because the y of the scene points the other way from the page's.
       const page = pageSizeOf(texture)
-      const bgX = frameScroll.x - (left + w / 2 - page.width / 2)
-      const bgY = frameScroll.y + (top + h / 2 - page.height / 2)
+      const bgX = page.width / 2 - (frameScroll.x + left + w / 2)
+      const bgY = frameScroll.y + top + h / 2 - page.height / 2
       const key = `${w} ${h} ${layoutWidth} ${layoutHeight} ${bgX} ${bgY}`
       if (key === last) return
       last = key
