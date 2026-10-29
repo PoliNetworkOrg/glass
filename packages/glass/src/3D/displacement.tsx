@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { type Mesh, type OrthographicCamera, ShaderMaterial, type Texture, Vector2 } from "three"
 import type { ShapeConfig } from "../types/schemas"
 import { drawFrames, frameScroll, type GlassBounds } from "../utils/hooks"
+import { createPredictor } from "../utils/predict"
 import { pageSizeOf } from "../utils/texture"
 
 export type GlassDisplacementProps = {
@@ -17,6 +18,8 @@ export type GlassDisplacementProps = {
   frost: number
   /** The captured page, which is what gets bent */
   texture: Texture
+  /** How far ahead, in ms, the page is drawn while it moves under the glass */
+  scrollLead: number
 }
 
 /** The shortest side, in px, of the controls the apple profile was fitted on */
@@ -119,7 +122,7 @@ const FRAGMENT = /* glsl */ `
  * of the glass (rim, stroke, shadow) stands in for.
  */
 export function GlassDisplacement(props: GlassDisplacementProps) {
-  const { bounds, borderRadius, cornerExponent, shape, frost, texture } = props
+  const { bounds, borderRadius, cornerExponent, shape, frost, texture, scrollLead } = props
   const mesh = useRef<Mesh>(null)
   const get = useThree((state) => state.get)
   const store = useStore()
@@ -166,15 +169,20 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
   // one of them moved or the glass changed. A new registration (the props changed) draws on its first frame.
   useEffect(() => {
     let last = ""
-    return drawFrames(() => {
+    const predict = createPredictor()
+    return drawFrames((time) => {
       const { width: w, height: h, layoutWidth, layoutHeight, left, top } = bounds.get()
       if (w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return
-      // Where the center of the page is, from the center of the glass, in the scene (y up). The center of the glass is
-      // at scroll + left + w / 2 on the page, so the page's center is that much to its left, and the same distance
-      // above it. The two come out with opposite signs because the y of the scene points the other way from the page's.
+      // Where the center of the glass is on the page, and where it will be when this frame is on screen. It is what
+      // moves with the scroll for a glass that stays in place on the screen, and what doesn't for one that scrolls
+      // with the page, which is drawn in place by the browser itself.
+      const [cx, cy] = predict(time, frameScroll.x + left + w / 2, frameScroll.y + top + h / 2, scrollLead)
+      // Where the center of the page is, from the center of the glass, in the scene (y up): that much to its left,
+      // and the same distance above it. The two come out with opposite signs because the y of the scene points the
+      // other way from the page's.
       const page = pageSizeOf(texture)
-      const bgX = page.width / 2 - (frameScroll.x + left + w / 2)
-      const bgY = frameScroll.y + top + h / 2 - page.height / 2
+      const bgX = page.width / 2 - cx
+      const bgY = cy - page.height / 2
       const key = `${w} ${h} ${layoutWidth} ${layoutHeight} ${bgX} ${bgY}`
       if (key === last) return
       last = key
@@ -216,7 +224,7 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
         state.setSize(layoutWidth, layoutHeight, state.size.top, state.size.left)
       } else state.gl.render(state.scene, state.camera)
     })
-  }, [bounds, borderRadius, cornerExponent, shape, frost, texture, material, get])
+  }, [bounds, borderRadius, cornerExponent, shape, frost, texture, scrollLead, material, get])
 
   return (
     <mesh ref={mesh} material={material} frustumCulled={false}>

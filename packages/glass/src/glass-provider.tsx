@@ -10,6 +10,13 @@ export type GlassProviderProps = {
   blur?: number
   /** Turns the 3D glass off for the whole tree, and stops capturing the background. Default: true */
   enabled?: boolean
+  /**
+   * How far ahead, in ms, the 3D glass draws the page while the page moves under it. The browser tells the page that
+   * it scrolled a frame or more after it did, so the glass draws the page behind where it is: it makes up for that by
+   * drawing it where it is going, at the speed it is moving. 0 draws it where it was. Default: 16, which is the frame
+   * Chrome is late by (measured: 41px behind during a 2500px/s scroll without it, about 1px with it)
+   */
+  scrollLead?: number
 }
 
 /**
@@ -28,6 +35,7 @@ export function GlassProvider(props: GlassProviderProps) {
     return () => setWanted((n) => n - 1)
   }, [])
   const texture = useBackgroundTexture(props.deps, props.blur, enabled && wanted > 0)
-  const value = useMemo(() => ({ texture, enabled, want }), [texture, enabled, want])
+  const scrollLead = props.scrollLead ?? 16
+  const value = useMemo(() => ({ texture, enabled, want, scrollLead }), [texture, enabled, want, scrollLead])
   return <GlassContext.Provider value={value}>{props.children}</GlassContext.Provider>
 }

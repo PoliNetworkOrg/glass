@@ -10,12 +10,15 @@ type GlassContextType = {
    * one does, so a tree whose glass is all CSS (a slow device, reduced motion, nothing on screen) never pays for it.
    */
   want: () => () => void
+  /** How far ahead, in ms, the glass draws the page while it moves under it, see the provider's prop */
+  scrollLead: number
 }
 
 export const GlassContext = createContext<GlassContextType>({
   texture: null,
   enabled: true,
   want: () => () => {},
+  scrollLead: 16,
 })
 
 export function useGlass() {

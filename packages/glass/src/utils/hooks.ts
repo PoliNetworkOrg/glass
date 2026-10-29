@@ -144,7 +144,7 @@ const pageSize = () => `${document.documentElement.scrollWidth}x${document.docum
 type Watcher = () => (() => void) | undefined
 
 const watchers = new Set<Watcher>()
-const drawers = new Set<() => void>()
+const drawers = new Set<(time: number) => void>()
 let frame = 0
 
 /**
@@ -153,7 +153,7 @@ let frame = 0
  */
 export const frameScroll = { x: 0, y: 0 }
 
-function tick() {
+function tick(time: number) {
   frame = requestAnimationFrame(tick)
   frameScroll.x = window.scrollX
   frameScroll.y = window.scrollY
@@ -165,7 +165,7 @@ function tick() {
   }
   for (const commit of commits) commit()
   // and drawn in the same frame, from what was just read: a glass drawn on the next one would be a frame behind
-  for (const draw of drawers) draw()
+  for (const draw of drawers) draw(time)
 }
 
 function startLoop() {
@@ -196,7 +196,7 @@ function watchFrames(read: Watcher) {
  * Calls `draw` on every frame, after every watcher has read and committed, so it draws where the page and the
  * elements are in this frame. It shares the loop of {@link watchFrames}.
  */
-export function drawFrames(draw: () => void) {
+export function drawFrames(draw: (time: number) => void) {
   drawers.add(draw)
   startLoop()
   return () => {

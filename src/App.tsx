@@ -44,6 +44,11 @@ const kittens = [
 
 const defaultConfig = getDefaultValues(SceneConfigSchema)
 
+// How far ahead the glass draws the page while it scrolls, in ms, to tune it on a device: `?lead=0` turns it off, and
+// without it the glass has its default
+const leadParam = new URLSearchParams(window.location.search).get("lead")
+const scrollLead = leadParam === null ? undefined : Number(leadParam) || 0
+
 function App() {
   const [glassOptions, setGlassOptions] = useState<SceneConfig>(SceneConfigSchema.parse(defaultConfig))
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -79,7 +84,7 @@ function App() {
   const glassColor = tinted ? tintColor : isDarkMode ? glassColors.dark : glassColors.light
 
   return (
-    <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur}>
+    <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur} scrollLead={scrollLead}>
       <div className={isDarkMode ? "dark" : ""}>
         <div className="min-h-screen bg-background">
           {/* Demo Glass Elements */}

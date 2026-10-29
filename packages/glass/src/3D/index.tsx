@@ -7,6 +7,8 @@ import { GlassFallback, type GlassFallbackProps } from "./fallback"
 
 export type Glass3DProps = GlassFallbackProps & {
   texture: Texture
+  /** How far ahead, in ms, the page is drawn while it moves under the glass */
+  scrollLead?: number
 }
 
 const MotCanv = motion.create(Canvas)
@@ -57,6 +59,7 @@ export function Glass3D(props: Glass3DProps) {
         shape={shape}
         frost={surface.frost}
         texture={texture}
+        scrollLead={props.scrollLead ?? 0}
       />
     </MotCanv>
   )

@@ -60,7 +60,7 @@ export function Glass(props: GlassProps) {
   // parsed again only when the options change, not each time the parent renders: a new scene is a new draw
   const optionsKey = JSON.stringify(options)
   const scene = useMemo(() => SceneConfigSchema.parse(JSON.parse(optionsKey)), [optionsKey])
-  const { texture, enabled, want } = useGlass()
+  const { texture, enabled, want, scrollLead } = useGlass()
   const nested = useContext(GlassNestContext)
 
   const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
@@ -151,7 +151,7 @@ export function Glass(props: GlassProps) {
         {do3D ? (
           <>
             <Suspense fallback={<GlassFallback {...commonProps} />}>
-              <Glass3D {...commonProps} texture={texture} />
+              <Glass3D {...commonProps} texture={texture} scrollLead={scrollLead} />
             </Suspense>
             {scene.tint.opacity > 0 && (
               <div

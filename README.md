@@ -27,6 +27,7 @@ captured again when `deps` or `blur` change, when the page changes size, and whe
 | `deps` | When any of them changes the background is captured again (the theme, for example). |
 | `blur` | Blur of the captured background, in px. It is shared by all the glass in the provider, so `plane.blur` of a glass's options takes effect only where the app passes it here. |
 | `enabled` | `false` turns the 3D glass off for the whole tree and stops capturing. Default `true`. |
+| `scrollLead` | How far ahead, in ms, the 3D glass draws the page while the page moves under it, to make up for the browser telling the page it scrolled after it did. Default `16`, a frame, which is what Chrome needs. `0` turns it off. |
 
 Elements with a `glass-ignore` attribute, and canvases, are left out of the capture. `<Glass>` sets it on itself.
 
@@ -117,8 +118,9 @@ of the rim and no `ior` or `thickness` made it follow this profile.
   single batched read for all the glass) and redraws only when that changed. So whatever moves it without a scroll,
   its own press and stretch, a CSS transition or animation, a layout shift, the glass keeps the page lined up behind
   it. The scroll position is read from the window each frame too, not only from scroll events, and the glass is drawn
-  in that same frame. The browser scrolls the page off the page's thread, so the glass can still trail a fast scroll
-  by the frame it takes to hear of it.
+  in that same frame. The browser scrolls the page off the page's thread and tells the page a frame or more later, so
+  the glass draws the page where it is going, at the speed it moves, `scrollLead` ms ahead (see `GlassProvider`).
+  In Chrome, during a 2500px/s scroll, that takes the glass from 41px behind the page to within a few px of it.
 - **Opt out.** `<GlassProvider enabled={false}>` for everything, or `data-glass-off` on any ancestor of a glass for a
   region of the page (read when the glass comes into view).
 
