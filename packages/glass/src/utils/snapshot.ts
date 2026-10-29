@@ -8,7 +8,7 @@
 //
 // What the picture sees differently from the page, and what is done about it:
 //   - an SVG image loads nothing, so images, fonts and the other urls are inlined as data urls (fetched once, kept)
-//   - its viewport is the whole page, so viewport units are turned into px first
+//   - its viewport is the whole page, so viewport units are turned into px first, and <html> is given its width
 //   - its `:root` is the <svg>, so rules on `:root` are made to match the copy of <html> too
 //   - scripts don't run in it, so <noscript> would show and is taken out
 //   - what the page draws by itself (canvas, video, iframes) and the scroll of inner scrollers aren't in it
@@ -72,14 +72,52 @@ async function inlineUrls(css: string, base: string) {
 }
 
 /** Viewport units of any kind (`100dvh`, `50vw`, `10vmin`) */
-const VIEWPORT_RE = /(?<![\w-])(-?\d*\.?\d+)(?:s|l|d)?(vh|vw|vi|vb|vmin|vmax)\b/g
+const VIEWPORT_RE = /(?<![\w-])(-?\d*\.?\d+)(s|l|d)?(vh|vw|vi|vb|vmin|vmax)\b/g
+
+type Prefix = "" | "s" | "l" | "d"
+/** px per viewport unit, for each of the plain, small, large and dynamic viewports, as [width, height] */
+type ViewportUnits = Record<Prefix, readonly [number, number]>
+
+let viewport: ViewportUnits = { "": [0, 0], s: [0, 0], l: [0, 0], d: [0, 0] }
+
+/**
+ * Measures what the viewport units are on the page, by sizing an element with them. Nothing the window says gives
+ * them: `innerWidth` is the visual viewport, which a phone zoomed out to fit a page wider than its screen makes bigger
+ * than the layout one the units are of, and the small, large and dynamic heights are where its toolbars stand.
+ */
+function measureViewport(): ViewportUnits {
+  const probe = document.createElement("div")
+  probe.style.cssText = "position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none;"
+  document.body.append(probe)
+  const size = (prefix: Prefix): [number, number] => {
+    probe.style.width = "0"
+    probe.style.height = "0"
+    probe.style.width = `100${prefix}vw`
+    probe.style.height = `100${prefix}vh`
+    return [probe.offsetWidth / 100, probe.offsetHeight / 100]
+  }
+  const plain = size("")
+  // a browser without the small, large and dynamic units has only the plain ones
+  const or = ([w, h]: [number, number]) => [w || plain[0], h || plain[1]] as const
+  const units = { "": plain, s: or(size("s")), l: or(size("l")), d: or(size("d")) }
+  probe.remove()
+  return units
+}
 
 function fixViewport(css: string) {
-  const vw = window.innerWidth / 100
-  const vh = window.innerHeight / 100
-  const per = { vw, vi: vw, vh, vb: vh, vmin: Math.min(vw, vh), vmax: Math.max(vw, vh) } as const
   return css
-    .replace(VIEWPORT_RE, (_, n: string, unit: keyof typeof per) => `${Number(n) * per[unit]}px`)
+    .replace(VIEWPORT_RE, (_, n: string, prefix: Prefix | undefined, unit: string) => {
+      const [vw, vh] = viewport[prefix ?? ""]
+      const per =
+        unit === "vw" || unit === "vi"
+          ? vw
+          : unit === "vh" || unit === "vb"
+            ? vh
+            : unit === "vmin"
+              ? Math.min(vw, vh)
+              : Math.max(vw, vh)
+      return `${Number(n) * per}px`
+    })
     .replace(/:root\b/g, ":is(:root, html)")
 }
 
@@ -144,7 +182,7 @@ function prepare(sheet: CSSStyleSheet, fonts: Set<string>, fontsKey: string): Pr
   } catch {
     /* another origin's */
   }
-  const key = `${rules?.length ?? "x"}|${fontsKey}|${window.innerWidth}x${window.innerHeight}`
+  const key = `${rules?.length ?? "x"}|${fontsKey}|${JSON.stringify(viewport)}`
   const cached = prepared.get(sheet)
   if (cached?.key === key) return cached.css
 
@@ -253,7 +291,12 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
   const width = page.scrollWidth
   const height = page.scrollHeight
 
+  viewport = measureViewport()
+
   const copy = page.cloneNode(true) as HTMLElement
+  // the picture is as wide as everything on the page, which is wider than the page itself where something overflows
+  // it: the copy of <html> keeps the width of the page, or what is centered or wraps in it would be laid out wider
+  copy.style.width = getComputedStyle(page).width
   const [css] = await Promise.all([pageCss(), copyState(page, copy)])
 
   // what the page styles with is replaced by its CSS in one sheet, and what only matters to a live page is dropped
