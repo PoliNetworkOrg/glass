@@ -2,7 +2,7 @@ import { GlassLayer } from "@polinetwork/glass"
 import { Activity } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
-import { Segmented, ShowGlass } from "./glass"
+import { type GlassMode, Segmented, ShowGlass } from "./glass"
 
 type Stats = { fps: number; worst: number; glass: number; drawn: number }
 
@@ -45,15 +45,15 @@ export type OrbCount = (typeof ORB_COUNTS)[number]
 export function PerfPanel({
   orbs,
   onOrbsChange,
-  force3D,
-  onForce3DChange,
+  mode,
+  onModeChange,
   layered,
   onLayeredChange,
 }: {
   orbs: OrbCount
   onOrbsChange: (orbs: OrbCount) => void
-  force3D: boolean
-  onForce3DChange: (force3D: boolean) => void
+  mode: GlassMode
+  onModeChange: (mode: GlassMode) => void
   layered: boolean
   onLayeredChange: (layered: boolean) => void
 }) {
@@ -114,18 +114,18 @@ export function PerfPanel({
                 className="size-4 accent-sky-500"
               />
             </label>
-            <label className="flex cursor-pointer items-center justify-between gap-2">
-              <span>
-                Force 3D
-                <span className="block text-xs opacity-60">Off follows the device check</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={force3D}
-                onChange={(e) => onForce3DChange(e.target.checked)}
-                className="size-4 accent-sky-500"
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs opacity-60">Glass: 3D, as the device check decides, or the CSS fallback</span>
+              <Segmented
+                options={[
+                  { value: "3d", label: "3D" },
+                  { value: "auto", label: "Auto" },
+                  { value: "css", label: "CSS" },
+                ]}
+                value={mode}
+                onChange={onModeChange}
               />
-            </label>
+            </div>
           </>
         )}
       </ShowGlass>

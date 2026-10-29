@@ -17,7 +17,7 @@ import {
 import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { PagePicker } from "../router"
-import { GlassButton, Segmented, ShowcaseContext, ShowGlass } from "./glass"
+import { GlassButton, type GlassMode, modeProps, Segmented, ShowcaseContext, ShowGlass } from "./glass"
 import { type OrbCount, Orbs, PerfPanel } from "./perf"
 import { gallery, moods, photos } from "./photos"
 
@@ -61,7 +61,7 @@ function Header({ dark, onDarkChange }: { dark: boolean; onDarkChange: (dark: bo
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
           <ShowcaseContext.Consumer>
-            {({ force3D }) => <PagePicker dark={dark} force3D={force3D} lens />}
+            {({ mode }) => <PagePicker dark={dark} {...modeProps(mode)} lens />}
           </ShowcaseContext.Consumer>
           <GlassButton
             label={dark ? "Light theme" : "Dark theme"}
@@ -416,11 +416,11 @@ function TabBar() {
 
 export function Showcase() {
   const [dark, setDark] = useState(false)
-  const [force3D, setForce3D] = useState(true)
+  const [mode, setMode] = useState<GlassMode>("3d")
   const [layered, setLayered] = useState(true)
   const [orbs, setOrbs] = useState<OrbCount>("0")
   const [mood, setMood] = useState<Mood>("All")
-  const context = useMemo(() => ({ dark, force3D }), [dark, force3D])
+  const context = useMemo(() => ({ dark, mode }), [dark, mode])
 
   return (
     <ShowcaseContext.Provider value={context}>
@@ -447,8 +447,8 @@ export function Showcase() {
               <PerfPanel
                 orbs={orbs}
                 onOrbsChange={setOrbs}
-                force3D={force3D}
-                onForce3DChange={setForce3D}
+                mode={mode}
+                onModeChange={setMode}
                 layered={layered}
                 onLayeredChange={setLayered}
               />

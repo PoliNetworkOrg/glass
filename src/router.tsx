@@ -29,13 +29,24 @@ export function useRoute() {
  *
  * @param lens It sits on another glass (the header of the showcase): slightly tinted, see `lensOptions`
  */
-export function PagePicker({ dark = false, force3D, lens }: { dark?: boolean; force3D?: boolean; lens?: boolean }) {
+export function PagePicker({
+  dark = false,
+  force3D,
+  disable3D,
+  lens,
+}: {
+  dark?: boolean
+  force3D?: boolean
+  disable3D?: boolean
+  lens?: boolean
+}) {
   const route = useRoute()
   return (
     <Glass
       options={lens ? lensOptions(dark) : glassPresets.regular}
       color={lens ? LENS_COLOR : dark ? glassColors.dark : glassColors.light}
       force3D={force3D}
+      disable3D={disable3D}
       className={cn("flex gap-1 rounded-full p-1 text-sm font-medium", dark ? "text-white" : "text-slate-900")}
     >
       {pages.map((page) => (

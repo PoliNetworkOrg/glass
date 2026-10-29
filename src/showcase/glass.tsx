@@ -7,7 +7,16 @@ import { cn } from "@/lib/utils"
 
 export type Tone = "neutral" | keyof typeof glassTints
 
-export const ShowcaseContext = createContext({ dark: false, force3D: true })
+/**
+ * How the glass is drawn: `3d` always (to see it and measure it on a device the device check would give the CSS glass
+ * to), `auto` as the device check decides, `css` always with the CSS fallback (to compare)
+ */
+export type GlassMode = "3d" | "auto" | "css"
+
+/** What forcing the glass one way or the other takes, as props of a glass */
+export const modeProps = (mode: GlassMode) => ({ force3D: mode === "3d", disable3D: mode === "css" })
+
+export const ShowcaseContext = createContext<{ dark: boolean; mode: GlassMode }>({ dark: false, mode: "3d" })
 
 /** Whether a glass is inside another one */
 const NestedContext = createContext(false)
@@ -31,7 +40,7 @@ type ShowGlassProps = Omit<GlassProps, "options" | "color"> & {
 
 /** A glass in the theme of the page: neutral by default, or tinted with one of the system colors */
 export function ShowGlass({ tone = "neutral", preset = "regular", className, children, ...rest }: ShowGlassProps) {
-  const { dark, force3D } = useContext(ShowcaseContext)
+  const { dark, mode } = useContext(ShowcaseContext)
   const nested = useContext(NestedContext)
   const tinted = tone !== "neutral"
   const options = tinted ? glassPresets.tinted : nested ? lensOptions(dark) : glassPresets[preset]
@@ -40,7 +49,7 @@ export function ShowGlass({ tone = "neutral", preset = "regular", className, chi
     <Glass
       options={options}
       color={color}
-      force3D={force3D}
+      {...modeProps(mode)}
       className={cn(tinted || dark ? "text-white" : "text-slate-900", className)}
       {...rest}
     >
