@@ -19,6 +19,8 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
+/** How long after a capture with new images it is taken again, see `fresh` of the snapshot */
+const RETAKE_MS = 400
 /** How long to wait after an image or a font loads before capturing, so a burst of them is captured once */
 const LOAD_SETTLE_MS = 150
 
@@ -82,6 +84,10 @@ export function usePageSnapshot(deps: unknown[] = [], blur: number = 0, enabled:
           const next = await snapshot(blurRef.current)
           // a capture that ended after the glass was turned off is thrown away
           if (state.on) setPicture(next)
+          else releaseSnapshot(next)
+          // one with an image no capture had before is taken again, in case WebKit drew it before decoding it, and
+          // one where an image failed to load, to ask for it again
+          if (next.fresh) schedule(RETAKE_MS)
         } catch {
           /* the page couldn't be drawn, the glass keeps the picture it had */
         }

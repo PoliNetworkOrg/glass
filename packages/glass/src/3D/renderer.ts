@@ -369,10 +369,16 @@ class GlassRenderer {
       o.stale = false
       this.capturing = true
       snapshotElement(state.element, OVERLAY_MARGIN)
-        .then((canvas) => {
+        .then(({ canvas, fresh }) => {
           o.canvas = canvas
           o.uploaded = false
           o.version++
+          // taken again a moment later, in case WebKit drew it before decoding the images that are new in it
+          if (fresh) {
+            setTimeout(() => {
+              o.stale = true
+            }, 400)
+          }
         })
         .catch(() => {
           /* the element couldn't be drawn: the glass is shown without what it has over it */
@@ -688,7 +694,12 @@ export function getRenderer(): GlassRenderer | null {
   return renderer
 }
 
-/** Frees the GPU copy of a picture of the page, once nothing draws it anymore */
+/**
+ * Frees a picture of the page, once nothing draws it anymore: its copy on the GPU, and its canvas, which is as big as
+ * the page and which iOS counts against a cap on the memory of all the canvases of the page until it is collected.
+ */
 export function releaseSnapshot(snapshot: Snapshot) {
   renderer?.release(snapshot)
+  snapshot.canvas.width = 0
+  snapshot.canvas.height = 0
 }

@@ -22,10 +22,34 @@ export type Snapshot = {
   /** The size of the page it shows, in CSS px */
   width: number
   height: number
+  /**
+   * It has a resource in it (an image, a font) that no picture had before, or one failed to load and will be asked for
+   * again. WebKit can draw an SVG image before the images in it are decoded, and leave them out, and the network of a
+   * page that is loading can fail: a picture like this one is worth taking again a moment later.
+   */
+  fresh: boolean
 }
 
 /** url to its data url, fetched once */
 const inlined = new Map<string, Promise<string | null>>()
+/**
+ * Counts what happened to the resources of the pictures: one inlined, or one that failed and is to be asked for again.
+ * A picture during which it went up is worth taking again, see `fresh` of the snapshot.
+ */
+let inlinedCount = 0
+/** How many times a resource is asked for before the pictures go without it */
+const TRIES = 3
+const failures = new Map<string, number>()
+
+/** Decodes an image once, ahead of the SVG it goes in, which WebKit could otherwise draw before it is decoded */
+const decoded = (dataUrl: string) => {
+  const img = new Image()
+  img.src = dataUrl
+  return img.decode().then(
+    () => dataUrl,
+    () => dataUrl
+  )
+}
 
 function toDataUrl(url: string): Promise<string | null> {
   if (url.startsWith("data:")) return Promise.resolve(url)
@@ -41,9 +65,21 @@ function toDataUrl(url: string): Promise<string | null> {
             reader.onload = () => resolve(reader.result as string)
             reader.onerror = reject
             reader.readAsDataURL(blob)
-          })
+          }).then((dataUrl) => (blob.type.startsWith("image/") ? decoded(dataUrl) : dataUrl))
       )
       .catch(() => null)
+      .then((result) => {
+        // A failure isn't kept, a few times: it may be the network of a page that is still loading, and the next
+        // picture asks again. After that the pictures go without it.
+        const failed = failures.get(url) ?? 0
+        if (result) inlinedCount++
+        else if (failed < TRIES - 1) {
+          failures.set(url, failed + 1)
+          inlined.delete(url)
+          inlinedCount++
+        }
+        return result
+      })
     inlined.set(url, data)
   }
   return data
@@ -357,6 +393,7 @@ async function copyState(page: HTMLElement, copy: HTMLElement) {
  * @returns The picture, and the size of the page it shows
  */
 export async function snapshot(blur = 0): Promise<Snapshot> {
+  const inlinedBefore = inlinedCount
   const page = document.documentElement
   const width = page.scrollWidth
   const height = page.scrollHeight
@@ -403,7 +440,7 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
     }
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
   }
-  return { canvas, width, height }
+  return { canvas, width, height, fresh: inlinedCount > inlinedBefore }
 }
 
 /**
@@ -427,9 +464,14 @@ const ELEMENT_CSS = `
  * what is behind a higher layer of glass. It is the element as it is laid out, without its transforms, on a
  * transparent background, with `margin` px around it for what overflows it.
  *
- * @returns The picture, `margin` px bigger than the box of the element on each side
+ * @returns The picture, `margin` px bigger than the box of the element on each side, and whether it is fresh (see
+ * {@link Snapshot})
  */
-export async function snapshotElement(el: HTMLElement, margin: number): Promise<HTMLCanvasElement> {
+export async function snapshotElement(
+  el: HTMLElement,
+  margin: number
+): Promise<{ canvas: HTMLCanvasElement; fresh: boolean }> {
+  const inlinedBefore = inlinedCount
   if (!viewport[""][0]) viewport = measureViewport()
   const width = el.offsetWidth
   const height = el.offsetHeight
@@ -477,5 +519,5 @@ export async function snapshotElement(el: HTMLElement, margin: number): Promise<
   canvas.width = Math.max(1, w)
   canvas.height = Math.max(1, h)
   canvas.getContext("2d")?.drawImage(img, 0, 0, w, h)
-  return canvas
+  return { canvas, fresh: inlinedCount > inlinedBefore }
 }
