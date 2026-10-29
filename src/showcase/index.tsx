@@ -1,4 +1,4 @@
-import { GlassProvider } from "@polinetwork/glass"
+import { GlassLayer, GlassProvider } from "@polinetwork/glass"
 import {
   ArrowRight,
   Bookmark,
@@ -427,7 +427,10 @@ export function Showcase() {
       <GlassProvider deps={[dark, mood]}>
         <div className={dark ? "dark" : ""}>
           <div className="min-h-screen bg-background text-foreground">
-            <Header dark={dark} onDarkChange={setDark} />
+            {/* the fixed parts float over the glass of the page as it scrolls, so they are on a layer above it */}
+            <GlassLayer layer={1}>
+              <Header dark={dark} onDarkChange={setDark} />
+            </GlassLayer>
             <main className="mx-auto max-w-6xl space-y-24 px-4 pt-24 pb-40 sm:px-6">
               <Hero />
               <Explore mood={mood} onMoodChange={setMood} />
@@ -439,15 +442,17 @@ export function Showcase() {
                 asked to get off the couch. Photos from Unsplash.
               </footer>
             </main>
-            <TabBar />
-            <PerfPanel
-              orbs={orbs}
-              onOrbsChange={setOrbs}
-              force3D={force3D}
-              onForce3DChange={setForce3D}
-              layered={layered}
-              onLayeredChange={setLayered}
-            />
+            <GlassLayer layer={1}>
+              <TabBar />
+              <PerfPanel
+                orbs={orbs}
+                onOrbsChange={setOrbs}
+                force3D={force3D}
+                onForce3DChange={setForce3D}
+                layered={layered}
+                onLayeredChange={setLayered}
+              />
+            </GlassLayer>
             <Orbs count={Number(orbs)} layered={layered} />
           </div>
         </div>

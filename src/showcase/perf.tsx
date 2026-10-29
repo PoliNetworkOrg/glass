@@ -105,7 +105,7 @@ export function PerfPanel({
             <label className="flex cursor-pointer items-center justify-between gap-2">
               <span>
                 Orbs over the glass
-                <span className="block text-xs opacity-60">On a layer of their own, bending the glass below</span>
+                <span className="block text-xs opacity-60">On the top layer, bending all the glass below</span>
               </span>
               <input
                 type="checkbox"
@@ -142,13 +142,13 @@ const ORB_KEYFRAMES = `
 `
 
 /**
- * @param layered On layer 1, above everything else, where they bend the header, the tab bar and the cards as they pass
- * over them. Otherwise on layer 0, under the header and the tab bar, bending only the page.
+ * @param layered On layer 2, above everything else, where they bend the header and the tab bar (layer 1) and the cards
+ * (layer 0) as they pass over them. Otherwise on layer 0, under the header and the tab bar, bending only the page.
  */
 export function Orbs({ count, layered }: { count: number; layered: boolean }) {
   if (count === 0) return null
   return (
-    <GlassLayer layer={layered ? 1 : 0}>
+    <GlassLayer layer={layered ? 2 : 0}>
       <div className={cn("pointer-events-none fixed inset-0 overflow-hidden", layered ? "z-[60]" : "z-30")} aria-hidden>
         <style>{ORB_KEYFRAMES}</style>
         {Array.from({ length: count }, (_, i) => {
