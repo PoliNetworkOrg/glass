@@ -1,5 +1,5 @@
 import { useMotionValue } from "motion/react"
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { RectReadOnly } from "react-use-measure"
 import type { Texture } from "three"
 import { getTexture } from "./texture"
@@ -19,17 +19,19 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
+/** How long the page has to stay the same size before it is captured again, so a resize is captured once at its end */
+const RESIZE_SETTLE_MS = 150
+
 /**
  *  # useBackgroundTexture
  * React hook to load and update the background texture based on the document element.
  *
- * It uses a ResizeObserver to monitor changes to the document layout and updates
- * the texture accordingly.
+ * The page is captured again when `deps` or `blur` change, when it changes size (once it settles), and when an
+ * image or a font finishes loading, since the capture before it was taken without them.
  *
  * ### Note
- * This hook ensures that if multiple updates are triggered in quick succession,
- * it will only perform the necessary updates to avoid redundant texture loads,
- * since capturing the page is the expensive part.
+ * One capture runs at a time: whatever asks for one while it runs gets a single capture after it, since capturing
+ * the page is the expensive part.
  *
  * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
  * @param blur Blur amount for the texture
@@ -37,59 +39,96 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
  * @returns The current background texture, or null if not yet loaded
  */
 export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, enabled: boolean = true): Texture | null {
-  const promiseRef = useRef<Promise<Texture> | null>(null) // current texture promise
-  const secondRef = useRef<boolean>(false) // flag to indicate if a second update is needed
   const [texture, setTexture] = useState<Texture | null>(null)
+  const blurRef = useRef(blur)
+  blurRef.current = blur
 
-  const updateTexture = useCallback(async () => {
-    secondRef.current = false // reset second update flag
-    promiseRef.current = getTexture(blur) // start new texture promise
-    const tex = await promiseRef.current // wait for texture to be ready
-    promiseRef.current = null // clear current promise
-
-    if (secondRef.current) {
-      // if a second update was requested, do it again
-      void updateTexture()
-    } else {
-      setTexture(tex)
+  const capturer = useMemo(() => {
+    const state = {
+      on: false,
+      running: false,
+      /** Something asked for a capture while one was running */
+      again: false,
+      /** The size of the page when it was last captured: a ResizeObserver reports it once when it starts, as a change */
+      size: "",
     }
-  }, [blur])
+    let timer: ReturnType<typeof setTimeout> | undefined
 
-  // Function to dispatch texture update
-  const dispatchUpdate = useCallback(() => {
-    if (!enabled) return
-    if (!promiseRef.current) {
-      // if no update is in progress, start one
-      void updateTexture()
-    } else {
-      // if an update is already in progress, mark for a second update
-      secondRef.current = true
+    const run = async () => {
+      if (state.running) {
+        state.again = true
+        return
+      }
+      state.running = true
+      do {
+        state.again = false
+        state.size = pageSize()
+        try {
+          const next = await getTexture(blurRef.current)
+          // a capture that was overtaken, or that ended after the texture was turned off, is thrown away
+          if (state.on && !state.again) setTexture(next)
+          else next.dispose()
+        } catch {
+          /* the page couldn't be drawn, the glass keeps the texture it had */
+        }
+      } while (state.again && state.on)
+      state.running = false
     }
-  }, [updateTexture, enabled])
+
+    return {
+      /** Captures the page after `ms`, or after the last of the calls that come in the meantime */
+      schedule(ms = 0) {
+        if (!state.on) return
+        clearTimeout(timer)
+        timer = setTimeout(() => void run(), ms)
+      },
+      resized() {
+        if (pageSize() !== state.size) this.schedule(RESIZE_SETTLE_MS)
+      },
+      start() {
+        state.on = true
+        this.schedule()
+      },
+      stop() {
+        state.on = false
+        clearTimeout(timer)
+        state.size = ""
+      },
+    }
+  }, [])
 
   useEffect(() => {
     if (!enabled) {
       setTexture(null)
       return
     }
-    const observer = new ResizeObserver(() => {
-      dispatchUpdate()
-    })
+    capturer.start()
+    const observer = new ResizeObserver(() => capturer.resized())
     observer.observe(document.documentElement)
-    return () => {
-      observer.disconnect()
+    // a load event doesn't bubble, but it can be caught on its way down
+    const loaded = (e: Event) => {
+      if (e.target instanceof HTMLImageElement) capturer.schedule(RESIZE_SETTLE_MS)
     }
-  }, [dispatchUpdate, enabled])
+    const fontsLoaded = () => capturer.schedule(RESIZE_SETTLE_MS)
+    document.addEventListener("load", loaded, true)
+    document.fonts.addEventListener("loadingdone", fontsLoaded)
+    return () => {
+      capturer.stop()
+      observer.disconnect()
+      document.removeEventListener("load", loaded, true)
+      document.fonts.removeEventListener("loadingdone", fontsLoaded)
+    }
+  }, [capturer, enabled])
 
-  useEffect(() => {
-    dispatchUpdate()
-  }, deps)
+  useEffect(() => capturer.schedule(), [capturer, blur, ...deps])
 
   // a texture is the whole page, so the one that was replaced has to be freed, or each capture leaves one on the GPU
   useEffect(() => () => texture?.dispose(), [texture])
 
   return texture
 }
+
+const pageSize = () => `${document.documentElement.scrollWidth}x${document.documentElement.scrollHeight}`
 
 type Watcher = () => (() => void) | undefined
 

@@ -59,7 +59,7 @@ export function Glass(props: GlassProps) {
     ...rest
   } = props
   const scene = SceneConfigSchema.parse(options)
-  const { texture, enabled } = useGlass()
+  const { texture, enabled, want } = useGlass()
   const nested = useContext(GlassNestContext)
 
   const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
@@ -77,12 +77,15 @@ export function Glass(props: GlassProps) {
   // a region of the page can opt out with data-glass-off, which is read when the glass comes into view
   const optedOut = useMemo(() => inView && Boolean(outer.current?.closest("[data-glass-off]")), [inView, outer])
   const capable = useGlassCapability()
-  const do3D =
+  const wants3D =
     enabled &&
     !optedOut &&
-    texture &&
     inView &&
-    ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || force3D)
+    ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || Boolean(force3D))
+  const do3D = wants3D && texture
+
+  // the page is captured only while some glass is going to draw it
+  useEffect(() => (wants3D ? want() : undefined), [wants3D, want])
 
   // where the page bounces past its end the canvas can't follow it, and the CSS glass can: see utils/overscroll.ts
   const bouncing = useOverscroll(Boolean(do3D))
