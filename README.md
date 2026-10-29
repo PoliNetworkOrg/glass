@@ -69,7 +69,9 @@ available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the d
 
 ## Configuration
 
-All the fields have defaults, and the demo (`pnpm dev`) has a control for each.
+All the fields have defaults, and the demo (`pnpm dev`) has a control for each. Its Showcase page (`#/showcase`) is a
+made up magazine built with the glass (a floating header, controls over photos, a player, a tab bar) with a panel of
+live numbers and moving glass to load it with.
 
 | Field | Range | Default | |
 | --- | --- | --- | --- |

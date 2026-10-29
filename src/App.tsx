@@ -12,6 +12,7 @@ import "./App.css"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DemoOptions } from "./options"
+import { PagePicker } from "./router"
 import { getDefaultValues } from "./options/utils"
 
 const kittens = [
@@ -87,6 +88,9 @@ function App() {
     <GlassProvider deps={[isDarkMode]} blur={glassOptions.plane.blur} scrollLead={scrollLead}>
       <div className={isDarkMode ? "dark" : ""}>
         <div className="min-h-screen bg-background">
+          <div className="fixed top-4 left-4 z-30">
+            <PagePicker dark={isDarkMode} />
+          </div>
           {/* Demo Glass Elements */}
           <div
             glass-ignore=""
