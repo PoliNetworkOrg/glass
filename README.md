@@ -20,8 +20,7 @@ The glass takes its shape from the element: its `border-radius` (px or `%`) and 
 ## `<GlassProvider>`
 
 Captures the page as the texture all the glass inside it refracts, while a glass inside it is drawn in 3D. It is
-captured again when `deps` or `blur` change, when the page settles at a new size, and when an image or a font finishes
-loading.
+captured again when `deps` or `blur` change, when the page changes size, and when an image or a font finishes loading.
 
 | Prop | |
 | --- | --- |
@@ -108,7 +107,8 @@ of the rim and no `ior` or `thickness` made it follow this profile.
   stylesheets (with viewport units, `:root`, fonts and images carried over), not the computed style of every element:
   about 15ms on the demo in Chromium and 20ms in Firefox, without blocking the page. Images, fonts and stylesheets are
   inlined once and kept. The page is only captured while some glass is drawn in 3D, so a page whose glass is all CSS
-  never pays for it, and a resize is captured once, when it settles.
+  never pays for it. One capture runs at a time, with a frame drawn between two of them, so while a window is resized
+  the glass follows it at about a capture a frame without holding the page's frames back.
 - **On screen only.** A glass gets its WebGL canvas when it comes within 200px of the screen and loses it when it leaves.
 - **Device check.** The first time glass is used the device is measured when the browser is idle (a WebGL2 context that
   refuses software renderers, then a few frames of a workload shaped like the glass), and the verdict is kept in

@@ -19,19 +19,27 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
-/** How long the page has to stay the same size before it is captured again, so a resize is captured once at its end */
-const RESIZE_SETTLE_MS = 150
+/** How long to wait after an image or a font loads before capturing, so a burst of them is captured once */
+const LOAD_SETTLE_MS = 150
+
+/**
+ * Resolves after the next frame has been drawn. Almost every step of a capture resolves as a microtask, so captures
+ * taken one after the other would never let the page draw a frame: there is one between them, which keeps a resize
+ * at full frame rate with a capture on most frames.
+ */
+const afterNextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
 
 /**
  *  # useBackgroundTexture
  * React hook to load and update the background texture based on the document element.
  *
- * The page is captured again when `deps` or `blur` change, when it changes size (once it settles), and when an
- * image or a font finishes loading, since the capture before it was taken without them.
+ * The page is captured again when `deps` or `blur` change, when it changes size, and when an image or a font
+ * finishes loading, since the capture before it was taken without them.
  *
  * ### Note
- * One capture runs at a time: whatever asks for one while it runs gets a single capture after it, since capturing
- * the page is the expensive part.
+ * One capture runs at a time: whatever asks for one while it runs gets a single capture after it, a frame later. So
+ * while the page keeps changing (a window being resized) it is captured about once a frame, and each one is shown,
+ * since it is newer than the one on screen.
  *
  * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
  * @param blur Blur amount for the texture
@@ -54,6 +62,13 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
     }
     let timer: ReturnType<typeof setTimeout> | undefined
 
+    /** Captures the page after `ms`, or after the last of the calls that come in the meantime */
+    const schedule = (ms = 0) => {
+      if (!state.on) return
+      clearTimeout(timer)
+      timer = setTimeout(() => void run(), ms)
+    }
+
     const run = async () => {
       if (state.running) {
         state.again = true
@@ -65,29 +80,25 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
         state.size = pageSize()
         try {
           const next = await getTexture(blurRef.current)
-          // a capture that was overtaken, or that ended after the texture was turned off, is thrown away
-          if (state.on && !state.again) setTexture(next)
+          // a capture that ended after the texture was turned off is thrown away
+          if (state.on) setTexture(next)
           else next.dispose()
         } catch {
           /* the page couldn't be drawn, the glass keeps the texture it had */
         }
+        if (state.again) await afterNextFrame()
       } while (state.again && state.on)
       state.running = false
     }
 
     return {
-      /** Captures the page after `ms`, or after the last of the calls that come in the meantime */
-      schedule(ms = 0) {
-        if (!state.on) return
-        clearTimeout(timer)
-        timer = setTimeout(() => void run(), ms)
-      },
+      schedule,
       resized() {
-        if (pageSize() !== state.size) this.schedule(RESIZE_SETTLE_MS)
+        if (pageSize() !== state.size) schedule()
       },
       start() {
         state.on = true
-        this.schedule()
+        schedule()
       },
       stop() {
         state.on = false
@@ -107,9 +118,9 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0, ena
     observer.observe(document.documentElement)
     // a load event doesn't bubble, but it can be caught on its way down
     const loaded = (e: Event) => {
-      if (e.target instanceof HTMLImageElement) capturer.schedule(RESIZE_SETTLE_MS)
+      if (e.target instanceof HTMLImageElement) capturer.schedule(LOAD_SETTLE_MS)
     }
-    const fontsLoaded = () => capturer.schedule(RESIZE_SETTLE_MS)
+    const fontsLoaded = () => capturer.schedule(LOAD_SETTLE_MS)
     document.addEventListener("load", loaded, true)
     document.fonts.addEventListener("loadingdone", fontsLoaded)
     return () => {
