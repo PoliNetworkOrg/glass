@@ -19,8 +19,9 @@ The glass takes its shape from the element: its `border-radius` (px or `%`) and 
 
 ## `<GlassProvider>`
 
-Captures the page as the texture all the glass inside it refracts. It is captured again when `deps` change or the page
-resizes, which is the expensive part.
+Captures the page as the texture all the glass inside it refracts, while a glass inside it is drawn in 3D. It is
+captured again when `deps` or `blur` change, when the page settles at a new size, and when an image or a font finishes
+loading.
 
 | Prop | |
 | --- | --- |
@@ -103,6 +104,11 @@ of the rim and no `ior` or `thickness` made it follow this profile.
 
 ## Performance
 
+- **Capture.** The page is drawn as an SVG image of a copy of it that keeps its classes and gets the page's own
+  stylesheets (with viewport units, `:root`, fonts and images carried over), not the computed style of every element:
+  about 15ms on the demo in Chromium and 20ms in Firefox, without blocking the page. Images, fonts and stylesheets are
+  inlined once and kept. The page is only captured while some glass is drawn in 3D, so a page whose glass is all CSS
+  never pays for it, and a resize is captured once, when it settles.
 - **On screen only.** A glass gets its WebGL canvas when it comes within 200px of the screen and loses it when it leaves.
 - **Device check.** The first time glass is used the device is measured when the browser is idle (a WebGL2 context that
   refuses software renderers, then a few frames of a workload shaped like the glass), and the verdict is kept in
@@ -110,7 +116,9 @@ of the rim and no `ior` or `thickness` made it follow this profile.
 - **Follows the element.** While a glass is drawn it reads where its element is on every frame (one shared loop, a
   single batched read for all the glass) and redraws only when that changed. So whatever moves it without a scroll,
   its own press and stretch, a CSS transition or animation, a layout shift, the glass keeps the page lined up behind
-  it. The scroll position is read from the window each frame too, not only from scroll events.
+  it. The scroll position is read from the window each frame too, not only from scroll events, and the glass is drawn
+  in that same frame. The browser scrolls the page off the page's thread, so the glass can still trail a fast scroll
+  by the frame it takes to hear of it.
 - **Opt out.** `<GlassProvider enabled={false}>` for everything, or `data-glass-off` on any ancestor of a glass for a
   region of the page (read when the glass comes into view).
 
@@ -125,8 +133,8 @@ of the rim and no `ior` or `thickness` made it follow this profile.
   overscroll in the scroll position (Safari can go below 0) the canvas follows it and this stays off. Or turn the
   bounce off: `html { overscroll-behavior: none; }`.
 - `corner-shape` isn't supported everywhere yet, where it isn't the corners are round.
-- The 3D glass shows the page as it was captured, so what changes under it (a video, an animation) isn't reflected until
-  the next capture.
+- The 3D glass shows the page as it was captured, so what changes under it (a video, an animation, a hover) isn't
+  reflected until the next capture. Canvases, videos, iframes and the scroll of inner scrollers aren't in the capture.
 
 ## TODO:
 - [ ] reactify the thingy
