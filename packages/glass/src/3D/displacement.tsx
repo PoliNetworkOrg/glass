@@ -146,6 +146,11 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
     []
   )
   useLayoutEffect(() => () => material.dispose(), [material])
+  // Handed the new picture as soon as it arrives, before the provider frees the old one (in an effect, after this):
+  // anything drawn in between (a resize of the canvas) would otherwise upload the freed one to the GPU all over again
+  useLayoutEffect(() => {
+    material.uniforms.uMap.value = texture
+  }, [material, texture])
 
   // R3F sizes the canvas too, when it measures it, and a resized canvas is cleared: it is drawn again right away, or it
   // would show empty until the next change
@@ -176,7 +181,6 @@ export function GlassDisplacement(props: GlassDisplacementProps) {
       const drawn = (w / layoutWidth + h / layoutHeight) / 2
       const half = Math.min(w, h) / 2
       const u = material.uniforms
-      u.uMap.value = texture
       u.uTexSize.value.set(page.width, page.height)
       u.uBg.value.set(bgX, bgY)
       u.uSize.value.set(w, h)
