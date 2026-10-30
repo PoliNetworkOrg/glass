@@ -63,6 +63,18 @@ export const SRGB = /* glsl */ `
   }
 `
 
+/** CSS's saturate(), on sRGB values as the browser applies it */
+export const SATURATE = /* glsl */ `
+  vec3 saturateCss(vec3 c, float s) {
+    mat3 m = mat3(
+      0.213 + 0.787 * s, 0.213 - 0.213 * s, 0.213 - 0.213 * s,
+      0.715 - 0.715 * s, 0.715 + 0.285 * s, 0.715 - 0.715 * s,
+      0.072 - 0.072 * s, 0.072 - 0.072 * s, 0.072 + 0.928 * s
+    );
+    return clamp(m * c, 0.0, 1.0);
+  }
+`
+
 /**
  * The glass. With the offset the profile gives the point (nothing past the bezel, and inside it the sample is taken
  * from further in, never past the edge where the backdrop ends, by an amount that grows toward the rim as t ** curve,
@@ -88,10 +100,13 @@ export const fragment = (encoded: boolean) => /* glsl */ `#version 300 es
   uniform float uCurve;
   uniform float uDispersion;
   uniform float uFrost;
+  /** The saturate() of the glass, applied here and not as a filter on its canvas, which costs a pass every frame */
+  uniform float uSaturate;
   in vec2 vPos;
   out vec4 fragColor;
 ${EDGE}
 ${SRGB}
+${SATURATE}
   vec3 sampleAt(vec2 p) {
     vec2 uv = (p - uBg) / uTexSize + 0.5;
     return ${encoded ? "decodeSRGB(texture(uMap, uv).rgb)" : "texture(uMap, uv).rgb"};
@@ -117,15 +132,17 @@ ${SRGB}
     float mag = 0.0;
     if (e.x >= 0.0 && e.x < uBezel) mag = pow(1.0 - e.x / uBezel, uCurve);
 
-    // red bends further and blue less, per unit of dispersion
+    // red bends further and blue less, per unit of dispersion. Where nothing bends (the face) the three are the same.
     vec2 bend = e.yz * uShift * mag;
     vec3 color = frosted(vPos - bend);
-    if (uDispersion > 0.0) {
+    if (uDispersion > 0.0 && mag > 0.0) {
       color.r = frosted(vPos - bend * (1.0 + uDispersion)).r;
       color.b = frosted(vPos - bend * (1.0 - uDispersion)).b;
     }
 
-    fragColor = vec4(toSRGB(color), 1.0);
+    vec3 srgb = toSRGB(color);
+    if (uSaturate != 1.0) srgb = saturateCss(srgb, uSaturate);
+    fragColor = vec4(srgb, 1.0);
   }
 `
 

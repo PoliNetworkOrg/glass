@@ -77,7 +77,7 @@ export function Glass3D(props: Glass3DProps) {
             shape,
             surface.frost
           ),
-          key: `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${JSON.stringify(shape)}`,
+          key: `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${tint.saturate} ${JSON.stringify(shape)}`,
         }
       },
     })
@@ -85,7 +85,6 @@ export function Glass3D(props: Glass3DProps) {
 
   if (!renderer) return <GlassFallback {...props} />
 
-  const { tint } = props.scene
   return (
     <canvas
       ref={canvas}
@@ -98,7 +97,6 @@ export function Glass3D(props: Glass3DProps) {
         zIndex: -1,
         // nothing in it is interactive
         pointerEvents: "none",
-        filter: tint.saturate !== 1 ? `saturate(${tint.saturate})` : undefined,
         boxShadow: "0 0 8px rgba(0, 0, 0, 0.1)",
       }}
     />

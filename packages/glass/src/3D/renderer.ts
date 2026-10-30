@@ -36,7 +36,7 @@ export type GlassState = {
   center: [number, number]
   /** How far ahead, in ms, the page is drawn while it moves */
   lead: number
-  /** The saturate() of its canvas */
+  /** The saturate() of the glass */
   saturate: number
   /** The profile, with the page as its backdrop */
   uniforms: GlassUniforms
@@ -77,6 +77,7 @@ const GLASS_UNIFORMS = [
   "uCurve",
   "uDispersion",
   "uFrost",
+  "uSaturate",
 ]
 const PAGE_UNIFORMS = ["uPage", "uPageSize", "uRegion", "uScroll"]
 const COMPOSITE_UNIFORMS = [
@@ -88,7 +89,6 @@ const COMPOSITE_UNIFORMS = [
   "uOverlaySize",
   "uRadius",
   "uExp",
-  "uSaturate",
   "uCenter",
   "uHalf",
   "uRegion",
@@ -507,7 +507,6 @@ class GlassRenderer {
       gl.uniform2f(c.uniforms.uOverlaySize, overlaySize[0], overlaySize[1])
       gl.uniform1f(c.uniforms.uRadius, state.uniforms.radius)
       gl.uniform1f(c.uniforms.uExp, state.uniforms.exponent)
-      gl.uniform1f(c.uniforms.uSaturate, state.saturate)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     })
     gl.disable(gl.BLEND)
@@ -571,6 +570,7 @@ class GlassRenderer {
     gl.uniform1f(u.uCurve, g.curve)
     gl.uniform1f(u.uDispersion, g.dispersion)
     gl.uniform1f(u.uFrost, g.frost)
+    gl.uniform1f(u.uSaturate, state.saturate)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
     entry.key = state.key

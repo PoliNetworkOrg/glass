@@ -52,7 +52,7 @@ export const GLASS_VERTEX = /* glsl */ `#version 300 es
 
 export const GLASS_FRAGMENT = /* glsl */ `#version 300 es
   precision highp float;
-  /** What the glass drew, its own size, in sRGB values */
+  /** What the glass drew, its own size, in sRGB values, saturated */
   uniform highp sampler2D uGlass;
   /** The picture of what the element has over its glass (its tint, its edges, what is in it), premultiplied */
   uniform highp sampler2D uOverlay;
@@ -65,26 +65,13 @@ export const GLASS_FRAGMENT = /* glsl */ `#version 300 es
   uniform vec2 uOverlaySize;
   uniform float uRadius;
   uniform float uExp;
-  /** The saturate() filter of its canvas */
-  uniform float uSaturate;
   in vec2 vLocal;
   out vec4 fragColor;
 ${EDGE}
-  // CSS's saturate(), on sRGB values as the browser applies it
-  vec3 saturateCss(vec3 c, float s) {
-    mat3 m = mat3(
-      0.213 + 0.787 * s, 0.213 - 0.213 * s, 0.213 - 0.213 * s,
-      0.715 - 0.715 * s, 0.715 + 0.285 * s, 0.715 - 0.715 * s,
-      0.072 - 0.072 * s, 0.072 - 0.072 * s, 0.072 + 0.928 * s
-    );
-    return clamp(m * c, 0.0, 1.0);
-  }
-
   void main() {
     // the glass, cut to its shape with a pixel of softness, as the browser clips it
     float inside = clamp(edge(vLocal, uDrawn * 0.5, uRadius, uExp).x + 0.5, 0.0, 1.0);
     vec3 glass = texture(uGlass, vLocal / uDrawn + 0.5).rgb;
-    if (uSaturate != 1.0) glass = saturateCss(glass, uSaturate);
     vec4 color = vec4(glass * inside, inside);
     if (uHasOverlay) {
       vec4 over = texture(uOverlay, (vLocal / uScale) / uOverlaySize + 0.5);
