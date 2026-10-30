@@ -196,10 +196,10 @@ const sameRect = (a: GlassBounds, b: DOMRect) =>
  *
  * Having the bounds as motion values allows for smooth animations without constant re-renders.
  *
- * It accounts for visual viewport offsets and updates on resize and scroll events. The rectangle is where the
- * element is drawn, transforms included, and a transform (a press, a transition, an animation) fires none of those
- * events, so while `watch` is true the rectangle is read on every frame instead, and only changes when it moved.
- * @see https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport
+ * The rectangle is where the element is drawn, transforms included. Only the 3D glass, which `watch`es it, needs where
+ * that is: a transform (a press, a transition, an animation) moves it without an event, so it is read on every frame
+ * then, and only changes when it moved. Otherwise it is read when the element changes size, which is all the CSS glass
+ * needs of it: following the scroll as well read the rectangle of every CSS glass on the page on every scroll event.
  *
  * _The DOM is the biggest threat to performance yet again_
  *
@@ -224,35 +224,19 @@ export function useMotionBounds(watch = false) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const updatePosition = () => {
+    const update = () => {
       if (ref.current) {
         motionValues.set(
           boundsOf(ref.current.getBoundingClientRect(), ref.current.offsetWidth, ref.current.offsetHeight)
         )
       }
     }
-    updatePosition()
-    // while it is watched every frame reads it, and the events would only read it again
-    if (watch) return
-
-    // everything that counld change the element's position or size
-    const observer = new ResizeObserver(updatePosition)
-    if (ref.current) {
-      observer.observe(ref.current)
-      observer.observe(document.documentElement)
-      window.addEventListener("scroll", updatePosition, { passive: true })
-      window.addEventListener("resize", updatePosition, { passive: true })
-      window.visualViewport?.addEventListener("scroll", updatePosition, { passive: true })
-      window.visualViewport?.addEventListener("resize", updatePosition, { passive: true })
-    }
-
-    return () => {
-      observer.disconnect()
-      window.removeEventListener("scroll", updatePosition)
-      window.removeEventListener("resize", updatePosition)
-      window.visualViewport?.removeEventListener("scroll", updatePosition)
-      window.visualViewport?.removeEventListener("resize", updatePosition)
-    }
+    update()
+    // while it is watched every frame reads it, and the observer would only read it again
+    if (watch || !ref.current) return
+    const observer = new ResizeObserver(update)
+    observer.observe(ref.current)
+    return () => observer.disconnect()
   }, [ref.current, watch])
 
   useEffect(() => {
