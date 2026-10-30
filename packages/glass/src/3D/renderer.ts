@@ -204,7 +204,8 @@ class GlassRenderer {
       antialias: false,
       depth: false,
       stencil: false,
-      powerPreference: "high-performance",
+      // not "high-performance": on a laptop with two GPUs that wakes the discrete one, and its battery with it, for what
+      // is one read of a texture a pixel; a phone has one GPU either way
     }) as WebGL2RenderingContext | null
     if (!gl) throw new Error("glass: no WebGL2")
     this.gl = gl
