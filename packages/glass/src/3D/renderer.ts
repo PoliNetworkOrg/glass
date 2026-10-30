@@ -13,7 +13,7 @@ import {
   VERTEX,
 } from "./displacement"
 
-// One WebGL context draws every glass on the page.
+// One WebGL context draws every glass on the page. docs/ARCHITECTURE.md walks through the passes below.
 //
 // A context per glass held a copy of the picture of the page each (WebGL contexts share nothing), uploaded it again on
 // every capture, and ran into the browser's cap on contexts: Chrome keeps 16 and drops the oldest, whose glass goes

@@ -1,15 +1,14 @@
 import type { ShapeConfig } from "../types/schemas"
 
-// The glass of the `apple` profile: the page behind is sampled through a displacement profile instead of being
-// refracted by a mesh. Near the rim of the glass the backdrop is pulled in from further inside, by an amount that grows
-// toward the rim, and the middle is left flat. The profile was extracted from recordings of Apple's Liquid Glass (see
-// Vitrium), where the rim also folds over: its outer band shows what is deeper in, as the curved edge of real glass
-// does.
+// The glass: the page behind is sampled through a displacement profile instead of being refracted by a mesh. Near
+// the rim of the glass the backdrop is pulled in from further inside, by an amount that grows toward the rim, and
+// the middle is left flat. The profile was extracted from recordings of Apple's Liquid Glass (see Vitrium), where
+// the rim also folds over: its outer band shows what is deeper in, as the curved edge of real glass does.
 //
 // It is drawn flat, so it has none of the shading of a mesh (lights, sheen, clearcoat, roughness), which the edge of
 // the glass (rim, stroke, shadow) stands in for.
 
-/** The shortest side, in px, of the controls the apple profile was fitted on */
+/** The shortest side, in px, of the controls the profile was fitted on */
 const FITTED_SIZE = 64
 
 /** A rectangle that covers the view, as a strip of 4 points */

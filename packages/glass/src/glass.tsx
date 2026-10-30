@@ -156,7 +156,7 @@ export function Glass(props: GlassProps) {
           justifyContent: "stretch",
           alignItems: "stretch",
           borderRadius: `${borderRadius}px`,
-          // the clip has to follow the same corner shape as the mesh, or it would cut it back to round
+          // the clip has to follow the same corner shape as the shader's, or it would cut it back to round
           ...(corners?.shape ? ({ cornerShape: corners.shape } as React.CSSProperties) : {}),
           overflow: "hidden",
 

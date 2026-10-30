@@ -365,7 +365,6 @@ function prepare(sheet: CSSStyleSheet, fonts: Set<string>, fontsKey: string): Pr
   return css
 }
 
-/** All of the page's CSS */
 /** All of the page's CSS. `ignore`: without what is marked to be left out, as the picture of the page needs it */
 async function pageCss(ignore = true) {
   const fonts = loadedFonts()

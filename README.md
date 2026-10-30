@@ -14,6 +14,8 @@ import { Glass, GlassProvider, glassPresets, glassTints } from "@polinetwork/gla
 </GlassProvider>
 ```
 
+How it is drawn, and how to work on the engine, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 The glass takes its shape from the element: its `border-radius` (px or `%`) and its `corner-shape`
 (`squircle`, `superellipse(K)`) are read from the computed style. It follows the element as it resizes, in real time.
 
@@ -25,7 +27,7 @@ captured again when `deps` or `blur` change, when the page changes size, and whe
 | Prop | |
 | --- | --- |
 | `deps` | When any of them changes the background is captured again (the theme, for example). |
-| `blur` | Blur of the captured background, in px. It is shared by all the glass in the provider, so `plane.blur` of a glass's options takes effect only where the app passes it here. |
+| `blur` | Blur of the captured background, in px. It is shared by all the glass in the provider, so `plane.blur` in a glass's options only affects the CSS glass: for the 3D glass, pass `blur` here. |
 | `enabled` | `false` turns the 3D glass off for the whole tree and stops capturing. Default `true`. |
 | `scrollLead` | How far ahead, in ms, the 3D glass draws the page while the page moves under it, to make up for the browser telling the page it scrolled after it did. Default `16`, a frame, which is what Chrome needs. `0` turns it off. |
 
@@ -53,6 +55,9 @@ available: with `prefers-reduced-motion` or `prefers-contrast: more`, when the d
 [Performance](#performance)), or when it is turned off.
 
 ## Layers
+
+`<GlassLayer layer={n}>` (or the `layer` prop of a `<Glass>`) is how a glass sees the glass below it. The pipeline is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#layers).
 
 The glass bends a picture of the page, which has no glass in it: a glass doesn't see another glass. Where one floats
 over another (a bubble over a fixed header, a player over a card) put it on a higher layer, and it bends what is
@@ -137,6 +142,8 @@ of the rim and no `ior` or `thickness` made it follow this profile.
 
 ## Performance
 
+The passes and caches behind these are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-renderer-and-its-passes).
+
 - **Capture.** The page is drawn as an SVG image of a copy of it that keeps its classes and gets the page's own
   stylesheets (with viewport units, `:root`, fonts and images carried over), not the computed style of every element:
   about 15ms on the demo in Chromium and 20ms in Firefox, without blocking the page. Images, fonts and stylesheets are
@@ -173,25 +180,3 @@ of the rim and no `ior` or `thickness` made it follow this profile.
 - `corner-shape` isn't supported everywhere yet, where it isn't the corners are round.
 - The 3D glass shows the page as it was captured, so what changes under it (a video, an animation, a hover) isn't
   reflected until the next capture. Canvases, videos, iframes and the scroll of inner scrollers aren't in the capture.
-
-## TODO:
-- [ ] reactify the thingy
-  - [ ] Error boundaries and Suspense to handle delays
-- [x] make it responsive
-  - [x] redo the screenshot on resize
-  - [x] make it work on zoom
-- [x] create the geometry
-  - [x] box with rounded edges via path extrude
-  - [ ] maybe vector math in rust in WASM?
-- [x] do the glass thing
-  - [x] frost !
-  - [x] refraction
-  - [x] reflection
-  - [x] fresnel 
-  - [x] chromatic aberration ?
-- [ ] performance
-  - [x] check webgl support
-  - [ ] make sure it does not explode (like profiling maybe?)
-- [x] accessibility
-  - [x] stop it when user has reduced motion enabled
-  - [x] increased contrast ?

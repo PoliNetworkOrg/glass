@@ -255,7 +255,7 @@ export function useMotionBounds(watch = false) {
 }
 
 /**
- * # useReducedMotion
+ * # useIncreasedContrast
  * Simple hook to detect if the user has requested increased contrast.
  *
  * @returns true if the user has set a preference for increased contrast

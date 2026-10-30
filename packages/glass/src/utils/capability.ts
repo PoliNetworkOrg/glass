@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 
 // Whether this device can draw the 3D glass at a frame rate worth having. Drawing it is a WebGL render
-// loop with a transmission pass, which a software renderer or an old phone GPU can't keep up with, and
+// loop with a pass of blurs and a shader per glass, which a software renderer or an old phone GPU can't keep up with, and
 // the CSS glass is the better choice there. It is measured once and kept, since the answer is about the
 // device and not the page.
 //
