@@ -357,8 +357,12 @@ class GlassRenderer {
         if (records.some((r) => !own(r))) created.stale = true
       })
       mutations.observe(el, { subtree: true, childList: true, attributes: true, characterData: true })
-      const resizes = new ResizeObserver(() => {
-        created.stale = true
+      // it reports the size it starts with too, which the picture about to be taken already has
+      let size = ""
+      const resizes = new ResizeObserver(([entry]) => {
+        const next = `${entry.contentRect.width}x${entry.contentRect.height}`
+        if (size && next !== size) created.stale = true
+        size = next
       })
       resizes.observe(el)
       created.disconnect = () => {
