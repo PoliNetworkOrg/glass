@@ -63,6 +63,68 @@ export const SRGB = /* glsl */ `
   }
 `
 
+/**
+ * The blur of a `surface.frost`, as the standard deviation of a Gaussian, in px. The frost was an average over a disc
+ * of radius `frost` around each pixel, which read with mipmaps blurred a little more than the disc: this is the
+ * Gaussian closest to the two, fitted to pictures of the glass before and after.
+ */
+export const frostSigma = (frost: number) => frost * 0.9
+
+/**
+ * How much smaller than its source a blur of `sigma` px is kept: a blurred picture has nothing finer than its blur in
+ * it, so it is kept at a size where the blur is still 2px or more, and stretched back when it is read
+ */
+export const blurScale = (sigma: number) => 2 ** -Math.max(0, Math.floor(Math.log2(sigma / 2)))
+
+/** A rectangle over the whole target, and where in the source each of its points reads */
+export const BLUR_VERTEX = /* glsl */ `#version 300 es
+  in vec2 aPos;
+  out vec2 vUv;
+  void main() {
+    vUv = aPos * 0.5 + 0.5;
+    gl_Position = vec4(aPos, 0.0, 1.0);
+  }
+`
+
+/**
+ * One direction of a Gaussian blur, in linear light: the weights of two pixels side by side are taken in one read,
+ * between them, which the GPU interpolates. It writes linear values to an sRGB target, which stores them encoded.
+ */
+export const BLUR_FRAGMENT = /* glsl */ `#version 300 es
+  precision highp float;
+  uniform highp sampler2D uSource;
+  /** A pixel of the source along the blur, in uv */
+  uniform vec2 uStep;
+  /** In pixels of the source */
+  uniform float uSigma;
+  /** How far the blur reads on each side, in pixels of the source */
+  uniform int uRadius;
+  /** The source holds sRGB values the GPU doesn't decode (what is behind a higher layer) */
+  uniform bool uEncoded;
+  in vec2 vUv;
+  out vec4 fragColor;
+${SRGB}
+  vec3 read(vec2 uv) {
+    vec3 c = texture(uSource, uv).rgb;
+    return uEncoded ? decodeSRGB(c) : c;
+  }
+  void main() {
+    vec3 sum = read(vUv);
+    float total = 1.0;
+    float k = -0.5 / (uSigma * uSigma);
+    for (int i = 1; i <= uRadius; i += 2) {
+      float a = float(i);
+      float wa = exp(a * a * k);
+      float wb = exp((a + 1.0) * (a + 1.0) * k);
+      float w = wa + wb;
+      vec2 at = uStep * (a + wb / w);
+      sum += (read(vUv + at) + read(vUv - at)) * w;
+      total += 2.0 * w;
+    }
+    fragColor = vec4(sum / total, 1.0);
+  }
+`
+
 /** CSS's saturate(), on sRGB values as the browser applies it */
 export const SATURATE = /* glsl */ `
   vec3 saturateCss(vec3 c, float s) {
@@ -78,10 +140,11 @@ export const SATURATE = /* glsl */ `
 /**
  * The glass. With the offset the profile gives the point (nothing past the bezel, and inside it the sample is taken
  * from further in, never past the edge where the backdrop ends, by an amount that grows toward the rim as t ** curve,
- * t being 0 where the bezel meets the face and 1 at the rim), the backdrop is read, frosted, and written in sRGB.
+ * t being 0 where the bezel meets the face and 1 at the rim), the backdrop is read and written in sRGB. The backdrop
+ * comes frosted: blurred once, for every frame and every glass that reads it.
  *
  * @param encoded The backdrop is a texture of sRGB values that the GPU doesn't decode (what is behind a higher
- * layer), and not the picture of the page (an sRGB texture, read in linear light)
+ * layer, clear), and not one the GPU reads in linear light (the picture of the page, or a blur)
  */
 export const fragment = (encoded: boolean) => /* glsl */ `#version 300 es
   precision highp float;
@@ -91,15 +154,12 @@ export const fragment = (encoded: boolean) => /* glsl */ `#version 300 es
   uniform vec2 uTexSize;
   uniform vec2 uBg;
   uniform vec2 uSize;
-  /** Where the glass starts in the canvas it is drawn on, so its grain doesn't depend on where that is */
-  uniform vec2 uOrigin;
   uniform float uRadius;
   uniform float uExp;
   uniform float uBezel;
   uniform float uShift;
   uniform float uCurve;
   uniform float uDispersion;
-  uniform float uFrost;
   /** The saturate() of the glass, applied here and not as a filter on its canvas, which costs a pass every frame */
   uniform float uSaturate;
   in vec2 vPos;
@@ -112,21 +172,6 @@ ${SATURATE}
     return ${encoded ? "decodeSRGB(texture(uMap, uv).rgb)" : "texture(uMap, uv).rgb"};
   }
 
-  // the backdrop averaged over a disc of radius uFrost px: taps on a spiral that covers it evenly, turned a little
-  // differently at every pixel so that what is left of the taps is grain and not a ghost of the image
-  vec3 frosted(vec2 p) {
-    vec3 c = sampleAt(p);
-    if (uFrost <= 0.0) return c;
-    vec2 pixel = gl_FragCoord.xy - uOrigin;
-    float turn = fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715)))) * 6.2831853;
-    for (int i = 0; i < 24; i++) {
-      float r = sqrt((float(i) + 0.5) / 24.0) * uFrost;
-      float a = float(i) * 2.39996323 + turn;
-      c += sampleAt(p + vec2(cos(a), sin(a)) * r);
-    }
-    return c / 25.0;
-  }
-
   void main() {
     vec3 e = edge(vPos, uSize * 0.5, uRadius, uExp);
     float mag = 0.0;
@@ -134,10 +179,10 @@ ${SATURATE}
 
     // red bends further and blue less, per unit of dispersion. Where nothing bends (the face) the three are the same.
     vec2 bend = e.yz * uShift * mag;
-    vec3 color = frosted(vPos - bend);
+    vec3 color = sampleAt(vPos - bend);
     if (uDispersion > 0.0 && mag > 0.0) {
-      color.r = frosted(vPos - bend * (1.0 + uDispersion)).r;
-      color.b = frosted(vPos - bend * (1.0 - uDispersion)).b;
+      color.r = sampleAt(vPos - bend * (1.0 + uDispersion)).r;
+      color.b = sampleAt(vPos - bend * (1.0 - uDispersion)).b;
     }
 
     vec3 srgb = toSRGB(color);

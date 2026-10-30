@@ -2,7 +2,16 @@ import { drawFrames, frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
 import { onMediaChange, type Snapshot, snapshotElement } from "../utils/snapshot"
 import { GLASS_FRAGMENT, GLASS_VERTEX, PAGE_FRAGMENT, PAGE_VERTEX } from "./composite"
-import { fragment, type GlassUniforms, QUAD, VERTEX } from "./displacement"
+import {
+  BLUR_FRAGMENT,
+  BLUR_VERTEX,
+  blurScale,
+  fragment,
+  frostSigma,
+  type GlassUniforms,
+  QUAD,
+  VERTEX,
+} from "./displacement"
 
 // One WebGL context draws every glass on the page.
 //
@@ -55,7 +64,7 @@ export type GlassTarget = {
 const ROW_WIDTH = 2048
 /** How much of what is around a glass is in the picture of what it has over its glass, in px */
 const OVERLAY_MARGIN = 8
-/** How much more than its frost reaches is drawn behind a higher layer, around its glass, in px */
+/** How much more than its frost reads is drawn behind a higher layer, around its glass, in px */
 const BACKDROP_MARGIN = 4
 
 type Program = {
@@ -69,16 +78,15 @@ const GLASS_UNIFORMS = [
   "uTexSize",
   "uBg",
   "uSize",
-  "uOrigin",
   "uRadius",
   "uExp",
   "uBezel",
   "uShift",
   "uCurve",
   "uDispersion",
-  "uFrost",
   "uSaturate",
 ]
+const BLUR_UNIFORMS = ["uSource", "uStep", "uSigma", "uRadius", "uEncoded"]
 const PAGE_UNIFORMS = ["uPage", "uPageSize", "uRegion", "uScroll"]
 const COMPOSITE_UNIFORMS = [
   "uGlass",
@@ -121,6 +129,9 @@ function link(gl: WebGL2RenderingContext, vertex: string, fragmentSource: string
   return { program, vao, uniforms }
 }
 
+/** How far a blur of `sigma` px reads on each side, in px: past three sigmas its weights are under 1% */
+const blurReach = (sigma: number) => Math.ceil(sigma * 3)
+
 /** A texture that is drawn into */
 type Target = { fbo: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number }
 
@@ -149,6 +160,9 @@ type Entry = {
   overlay: Overlay | null
   /** What is behind it, for the glass of a higher layer */
   behind: Backdrop | null
+  /** What is behind it blurred by its frost, and the blur across it, which the blur down it reads */
+  frosted: Target | null
+  across: Target | null
 }
 
 type Glass = { target: GlassTarget; entry: Entry; state: GlassState }
@@ -166,7 +180,10 @@ class GlassRenderer {
   private glassOnBackdrop!: Program
   private page!: Program
   private composite!: Program
+  private blur!: Program
   private readonly textures = new Map<Snapshot, WebGLTexture>()
+  /** The pictures blurred by a frost, by its sigma */
+  private readonly blurs = new Map<Snapshot, Map<number, Target>>()
   private readonly entries = new Map<GlassTarget, Entry>()
   private readonly contexts = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D | null>()
   private readonly snapshotIds = new WeakMap<Snapshot, number>()
@@ -207,9 +224,12 @@ class GlassRenderer {
     canvas.addEventListener("webglcontextrestored", () => {
       // everything that was on the GPU is gone with it
       this.textures.clear()
+      this.blurs.clear()
       for (const entry of this.entries.values()) {
         entry.output = null
         entry.behind = null
+        entry.frosted = null
+        entry.across = null
         if (entry.overlay) {
           entry.overlay.texture = null
           entry.overlay.uploaded = false
@@ -227,6 +247,7 @@ class GlassRenderer {
     this.glassOnBackdrop = link(gl, VERTEX, fragment(true), GLASS_UNIFORMS)
     this.page = link(gl, PAGE_VERTEX, PAGE_FRAGMENT, PAGE_UNIFORMS)
     this.composite = link(gl, GLASS_VERTEX, GLASS_FRAGMENT, COMPOSITE_UNIFORMS)
+    this.blur = link(gl, BLUR_VERTEX, BLUR_FRAGMENT, BLUR_UNIFORMS)
   }
 
   /** Draws `target` on every frame, until the function it returns is called */
@@ -240,6 +261,8 @@ class GlassRenderer {
       version: 0,
       overlay: null,
       behind: null,
+      frosted: null,
+      across: null,
     })
     this.stop ??= drawFrames((time) => this.draw(time))
     return () => {
@@ -255,25 +278,32 @@ class GlassRenderer {
 
   private free(entry: Entry) {
     const gl = this.gl
-    for (const target of [entry.output, entry.behind]) {
-      if (!target) continue
-      gl.deleteFramebuffer(target.fbo)
-      gl.deleteTexture(target.texture)
-    }
+    for (const target of [entry.output, entry.behind, entry.frosted, entry.across]) if (target) this.drop(target)
     if (entry.overlay) {
       entry.overlay.disconnect()
       if (entry.overlay.texture) gl.deleteTexture(entry.overlay.texture)
     }
   }
 
-  /** Frees the GPU copy of a picture that is no longer drawn */
+  private drop(target: Target) {
+    this.gl.deleteFramebuffer(target.fbo)
+    this.gl.deleteTexture(target.texture)
+  }
+
+  /** Frees the GPU copies of a picture that is no longer drawn: as it is, and blurred */
   release(snapshot: Snapshot) {
     const texture = this.textures.get(snapshot)
     if (texture) this.gl.deleteTexture(texture)
     this.textures.delete(snapshot)
+    for (const blurred of this.blurs.get(snapshot)?.values() ?? []) this.drop(blurred)
+    this.blurs.delete(snapshot)
   }
 
-  /** The picture on the GPU, uploaded the first time it is drawn, the way three.js did: sRGB, flipped, mipmapped */
+  /**
+   * The picture on the GPU, uploaded the first time it is drawn: sRGB, flipped. Without mipmaps: the glass reads it a
+   * pixel of the picture to a pixel of its canvas, and its frost reads a blur of it, so they would only take a third
+   * more memory and a pass over the whole page on every capture.
+   */
   private texture(snapshot: Snapshot) {
     const gl = this.gl
     let texture = this.textures.get(snapshot)
@@ -283,15 +313,85 @@ class GlassRenderer {
     gl.bindTexture(gl.TEXTURE_2D, texture)
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
-    gl.texStorage2D(gl.TEXTURE_2D, Math.floor(Math.log2(Math.max(width, height))) + 1, gl.SRGB8_ALPHA8, width, height)
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.SRGB8_ALPHA8, width, height)
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, snapshot.canvas)
-    gl.generateMipmap(gl.TEXTURE_2D)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     this.textures.set(snapshot, texture)
     return texture
+  }
+
+  /**
+   * The picture blurred by a frost, blurred the first time a glass with that frost draws it. The frost is the same
+   * blur wherever the glass bends the page, so it is the page that is blurred, once, and the glass reads it once a
+   * pixel: averaging the page around each pixel of each glass on each frame took 25 reads a pixel, 75 with dispersion.
+   */
+  private frosted(snapshot: Snapshot, frost: number) {
+    if (frost <= 0) return this.texture(snapshot)
+    const sigma = frostSigma(frost)
+    let bySigma = this.blurs.get(snapshot)
+    if (!bySigma) {
+      bySigma = new Map()
+      this.blurs.set(snapshot, bySigma)
+    }
+    let blurred = bySigma.get(sigma)
+    if (!blurred) {
+      const { width, height } = snapshot.canvas
+      const [across, down] = this.blurInto(this.texture(snapshot), width, height, sigma, false, null, null)
+      this.drop(across)
+      blurred = down
+      bySigma.set(sigma, blurred)
+    }
+    return blurred.texture
+  }
+
+  /**
+   * Blurs `source`, of `width` x `height` px, by `sigma` px: across into `across`, then down into `down`, made or
+   * resized to fit, at the size {@link blurScale} keeps it. Both cover the whole of the source, so a point of the
+   * source is at the same uv in them.
+   *
+   * @param encoded The source holds sRGB values the GPU doesn't decode (what is behind a higher layer)
+   * @returns `across` and `down`, sRGB textures read in linear light
+   */
+  private blurInto(
+    source: WebGLTexture,
+    width: number,
+    height: number,
+    sigma: number,
+    encoded: boolean,
+    across: Target | null,
+    down: Target | null
+  ): [Target, Target] {
+    const gl = this.gl
+    const scale = blurScale(sigma)
+    const w = Math.max(1, Math.round(width * scale))
+    const h = Math.max(1, Math.round(height * scale))
+    const a = this.target(across, w, height, true, gl.SRGB8_ALPHA8)
+    const d = this.target(down, w, h, true, gl.SRGB8_ALPHA8)
+    const b = this.blur
+    gl.useProgram(b.program)
+    gl.bindVertexArray(b.vao)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.uniform1i(b.uniforms.uSource, 0)
+    gl.uniform1f(b.uniforms.uSigma, sigma)
+    gl.uniform1i(b.uniforms.uRadius, blurReach(sigma))
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, a.fbo)
+    gl.viewport(0, 0, w, height)
+    gl.bindTexture(gl.TEXTURE_2D, source)
+    gl.uniform2f(b.uniforms.uStep, 1 / width, 0)
+    gl.uniform1i(b.uniforms.uEncoded, encoded ? 1 : 0)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, d.fbo)
+    gl.viewport(0, 0, w, h)
+    gl.bindTexture(gl.TEXTURE_2D, a.texture)
+    gl.uniform2f(b.uniforms.uStep, 0, 1 / height)
+    gl.uniform1i(b.uniforms.uEncoded, 0)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    return [a, d]
   }
 
   private snapshotId(snapshot: Snapshot) {
@@ -304,7 +404,13 @@ class GlassRenderer {
   }
 
   /** A texture of at least `width` x `height` to draw into, `current` if it is big enough. It only ever grows. */
-  private target(current: Target | null, width: number, height: number, exact: boolean): Target {
+  private target(
+    current: Target | null,
+    width: number,
+    height: number,
+    exact: boolean,
+    format: number = this.gl.RGBA8
+  ): Target {
     if (
       current &&
       (exact
@@ -314,15 +420,12 @@ class GlassRenderer {
       return current
     }
     const gl = this.gl
-    if (current) {
-      gl.deleteFramebuffer(current.fbo)
-      gl.deleteTexture(current.texture)
-    }
+    if (current) this.drop(current)
     const w = exact ? width : Math.max(width, current?.width ?? 0)
     const h = exact ? height : Math.max(height, current?.height ?? 0)
     const texture = gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, texture)
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, w, h)
+    gl.texStorage2D(gl.TEXTURE_2D, 1, format, w, h)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -408,13 +511,13 @@ class GlassRenderer {
    */
   private backdrop(glass: Glass, below: Glass[], scrollX: number, scrollY: number) {
     const members = [glass]
-    // the region: where the glass of the layer is on the screen, and as far around it as its frost reaches
+    // the region: where the glass of the layer is on the screen, and as far around it as the blur of its frost reads
     let x0 = Number.POSITIVE_INFINITY
     let y0 = Number.POSITIVE_INFINITY
     let x1 = Number.NEGATIVE_INFINITY
     let y1 = Number.NEGATIVE_INFINITY
     for (const { state } of members) {
-      const reach = state.uniforms.frost + BACKDROP_MARGIN
+      const reach = (state.uniforms.frost > 0 ? blurReach(frostSigma(state.uniforms.frost)) : 0) + BACKDROP_MARGIN
       const cx = state.center[0] - scrollX
       const cy = state.center[1] - scrollY
       x0 = Math.min(x0, cx - state.drawn[0] / 2 - reach)
@@ -539,41 +642,58 @@ class GlassRenderer {
   /** Draws a glass into its own texture, bending the page, or `backdrop` for the glass of a higher layer */
   private drawGlass({ entry, state }: Glass, backdrop: Backdrop | null, scrollX: number, scrollY: number) {
     const gl = this.gl
+    const g = state.uniforms
+    // what it bends, frosted: the page blurred once for all the glass, or what is behind it, blurred for it alone
+    let map: WebGLTexture
+    let encoded = false
+    if (!backdrop) map = this.frosted(state.snapshot, g.frost)
+    else if (g.frost > 0) {
+      ;[entry.across, entry.frosted] = this.blurInto(
+        backdrop.texture,
+        backdrop.width,
+        backdrop.height,
+        frostSigma(g.frost),
+        true,
+        entry.across,
+        entry.frosted
+      )
+      map = entry.frosted.texture
+    } else {
+      map = backdrop.texture
+      encoded = true
+    }
+
     const output = this.target(entry.output, state.width, state.height, true)
     entry.output = output
     gl.bindFramebuffer(gl.FRAMEBUFFER, output.fbo)
     gl.viewport(0, 0, state.width, state.height)
 
-    const program = backdrop ? this.glassOnBackdrop : this.glass
+    const program = encoded ? this.glassOnBackdrop : this.glass
     const u = program.uniforms
     gl.useProgram(program.program)
     gl.bindVertexArray(program.vao)
     gl.activeTexture(gl.TEXTURE0)
     gl.uniform1i(u.uMap, 0)
-    const g = state.uniforms
+    gl.bindTexture(gl.TEXTURE_2D, map)
     if (backdrop) {
       // Where the center of the backdrop texture is, from the center of the glass, y up. The region is at the bottom
       // left of the texture, which only ever grows.
       const [rx, ry, , rh] = backdrop.region
       const gx = state.center[0] - scrollX
       const gy = state.center[1] - scrollY
-      gl.bindTexture(gl.TEXTURE_2D, backdrop.texture)
       gl.uniform2f(u.uTexSize, backdrop.width, backdrop.height)
       gl.uniform2f(u.uBg, backdrop.width / 2 - (gx - rx), backdrop.height / 2 - (ry + rh - gy))
     } else {
-      gl.bindTexture(gl.TEXTURE_2D, this.texture(state.snapshot))
       gl.uniform2f(u.uTexSize, state.snapshot.width, state.snapshot.height)
       gl.uniform2f(u.uBg, g.bg[0], g.bg[1])
     }
     gl.uniform2f(u.uSize, g.size[0], g.size[1])
-    gl.uniform2f(u.uOrigin, 0, 0)
     gl.uniform1f(u.uRadius, g.radius)
     gl.uniform1f(u.uExp, g.exponent)
     gl.uniform1f(u.uBezel, g.bezel)
     gl.uniform1f(u.uShift, g.shift)
     gl.uniform1f(u.uCurve, g.curve)
     gl.uniform1f(u.uDispersion, g.dispersion)
-    gl.uniform1f(u.uFrost, g.frost)
     gl.uniform1f(u.uSaturate, state.saturate)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
