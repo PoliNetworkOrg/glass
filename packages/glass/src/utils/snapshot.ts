@@ -85,6 +85,61 @@ function toDataUrl(url: string): Promise<string | null> {
   return data
 }
 
+/** What fits an image to its size on the page, by its data url and the size, made once */
+const fitted = new Map<string, Promise<string>>()
+
+/**
+ * An image no bigger than the page draws it, for the picture, which is in CSS px: a photo of 3000px shown at 300px
+ * would be a hundred times its pixels in the SVG, to encode, decode and draw on every capture. It is made smaller by
+ * halves, so that the size it is made at changes only when the image's size on the page halves or doubles, and kept.
+ * One that is less than twice the size it is drawn at, or drawn at its own size (`object-fit: none`), stays as it is.
+ */
+async function fitImage(img: HTMLImageElement, data: string) {
+  const { naturalWidth: nw, naturalHeight: nh } = img
+  const w = img.offsetWidth
+  const h = img.offsetHeight
+  if (!nw || !nh || !w || !h) return data
+  // as big as it covers its box, whatever its object-fit does in it
+  const halves = Math.floor(Math.log2(Math.min(nw / w, nh / h)))
+  if (halves < 1) return data
+  const fit = getComputedStyle(img).objectFit
+  if (fit === "none" || fit === "scale-down") return data
+  const width = Math.max(1, Math.round(nw / 2 ** halves))
+  const height = Math.max(1, Math.round(nh / 2 ** halves))
+  const key = `${width}x${height} ${data.length} ${data.slice(-48)}`
+  let made = fitted.get(key)
+  if (!made) {
+    made = (async () => {
+      const source = new Image()
+      source.src = data
+      await source.decode()
+      const canvas = document.createElement("canvas")
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return data
+      ctx.imageSmoothingQuality = "high"
+      ctx.drawImage(source, 0, 0, width, height)
+      // a photo stays a JPEG, what can be transparent a PNG; encoded off the main thread
+      const type = data.startsWith("data:image/jpeg") ? "image/jpeg" : "image/png"
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.9))
+      // iOS counts a canvas against the memory of the page until it is collected
+      canvas.width = 0
+      canvas.height = 0
+      if (!blob) return data
+      const smaller = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+      return decoded(smaller)
+    })().catch(() => data)
+    fitted.set(key, made)
+  }
+  return made
+}
+
 const URL_RE = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g
 
 /** Inlines the urls in a piece of CSS, resolved against `base`. References to the document (`url(#id)`) stay. */
@@ -367,7 +422,7 @@ async function copyState(page: HTMLElement, copy: HTMLElement) {
     const src = img.currentSrc || img.src
     // an image that the page hasn't loaded (a lazy one far below) isn't drawn on it either
     const data = src && img.complete && !img.closest("[glass-ignore]") ? await toDataUrl(src) : null
-    if (data) clone.setAttribute("src", data)
+    if (data) clone.setAttribute("src", await fitImage(img, data))
     else clone.removeAttribute("src")
   })
 
