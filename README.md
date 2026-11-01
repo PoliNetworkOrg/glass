@@ -40,7 +40,7 @@ A `div` (it takes the usual props) with the glass drawn behind its children.
 | Prop | |
 | --- | --- |
 | `options` | The [configuration](#configuration) of the glass, or a [preset](#presets). |
-| `color` | The color of the glass: laid over it by `tint.opacity`, and the base of the CSS version. For `regular` and `clear` use `glassColors.light` or `glassColors.dark`, the neutral glass measured on Apple's tab bar. |
+| `color` | The color of the glass: laid over it by `tint.opacity`, and the base of the CSS version. For `regular` and `clear` use `glassColors.light` or `glassColors.dark`, the neutral glass measured on Apple's tab bar. In a dark interface also give `regular` the `glassThemeTint.dark` tint (see [Dark glass](#dark-glass)). |
 | `theme` | `light` or `dark`, which sets the light on the edges. By default it follows the lightness of `color`. |
 | `interactive` | For glass that is a control. It lifts on hover (1.045), snaps down (0.94) and is lit (brighter, more saturated) while pressed, and when dragged it stretches toward the pointer with an elastic falloff and squashes across, then springs back. A drag is a gesture, so the click that would follow it is swallowed (a tap still clicks). A press that starts on a link or button inside the glass is theirs. With `prefers-reduced-motion` it doesn't move, and is only lit. Default `false`. |
 | `claimTouch` | For an interactive glass above the content (a fixed header, a popover): a touch on it never scrolls what is under it. Otherwise a touch on the glass still scrolls the page, and the press carries on while it does. |
@@ -99,6 +99,24 @@ scrolling.
 | `clear` | Half the frost and tint, the colors behind pushed up (saturation 1.8), to get out of the way of what is behind it. |
 | `tinted` | Colored glass: its color is the `color` of the glass. `glassTints` has ready made ones (`blue`, `teal`, `green`, `yellow`, `orange`, `red`, `pink`, `purple`), `blue` being the one to start from. |
 
+### Dark glass
+
+Apple's dark glass is not the light one with a dark color: it lets through more of what is behind it, and lifts its
+shadows. Measured on Safari's toolbar in dark mode, black comes out as `#1d1d1d`, near white as `#a5aaaf`, and a page of
+`#030512` as `#262738`. That is the glass color over the backdrop raised to the power of `lift`. `glassThemeTint` holds
+the `tint` of `regular` for both interfaces (`light`: opacity 0.66, lift 1; `dark`: opacity 0.43, lift 0.67), to go with
+`glassColors`:
+
+```tsx
+<Glass
+  options={withPreset("regular", { tint: glassThemeTint.dark })}
+  color={glassColors.dark}
+/>
+```
+
+`glassColors.dark` is measured with that tint: over the plain `regular` one it comes out darker than Apple's. The CSS
+glass lifts too, as closely as CSS filters allow (see the architecture notes), and the other presets set `lift: 1`.
+
 ## Configuration
 
 All the fields have defaults, and the demo's Playground (`pnpm dev`, then `#/playground`) has a control for each. The
@@ -116,6 +134,7 @@ a tab bar), with a panel of live numbers and moving glass to load it with.
 | `surface.frost` | 0 – 32 | 2 | How much the glass blurs what is behind it, in px. Per glass, on top of `plane.blur`. |
 | `tint.opacity` | 0 – 1 | 0.66 | How much of `color` is laid over the glass. |
 | `tint.saturate` | 0.5 – 3 | 1 | Saturation of what is seen through the glass. |
+| `tint.lift` | 0.25 – 1 | 1 | Raises the dark of what is seen through the glass: its colors go to the power of this, so below 1 the shadows come up and the whites stay. 1 leaves them as they are. |
 | `edge.rim` | 0 – 1 | 1 | Strength of the highlight on the edges. |
 | `edge.stroke` | 0 – 1 | 1 | Strength of the hairline stroke around the glass. |
 | `edge.elevation` | `low` `default` `high` `extra-high` | `default` | How high the glass floats, which shapes the shadow it casts. |

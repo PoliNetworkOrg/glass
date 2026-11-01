@@ -249,6 +249,12 @@ skipped.
 
 > The CSS glass converts `frost` to a CSS `blur()` with its own factor (`FROST_TO_BLUR = 1.5` in `3D/fallback.tsx`),
 > fitted separately so that the two look alike. Change one and re-check the other against it.
+>
+> The same goes for `lift`: a backdrop filter has no gamma, so `liftFilter` in `3D/fallback.tsx` stands in for the
+> shader's `pow` with a `contrast()` and a `brightness()`, which can only scale and offset. It fits the line `c + a·x`
+> to `x^lift` by relative error, so the shadows come out right (black rises by about 0.06, where a fit over the whole
+> range would raise it by 0.17 and wash a dark page to gray) at the cost of highlights running slightly light. Checked
+> on a page of `#030512` under the dark glass: the shader gives about `(36,39,54)` and the CSS glass `(39,42,54)`.
 
 ## The glass shader
 
@@ -269,6 +275,10 @@ at the size the glass is drawn.
    Three reads only inside the bezel; the face is a single read.
 5. **Color.** Output is `toSRGB(color)`, then CSS-compatible `saturate()` if `uSaturate != 1`. Saturation is done here
    because applying it as a CSS filter on the canvas costs an extra pass every frame.
+6. **Lift.** If `uLift != 1`, `pow(max(srgb, 0), uLift)`, after the saturation and before the tint (a CSS layer over the
+   canvas), so the glass is the tint color over the backdrop raised to `lift`. Below 1 it raises the shadows and keeps
+   the whites: Apple's dark glass is about 0.67. The `max` keeps a saturation that overshoots below 0 from making
+   a NaN.
 
 `sampleAt(p)` maps glass-space `p` to the texture: `uv = (p - uBg) / uTexSize + 0.5`. `uBg` is where the *center of the
 texture* is relative to the glass center (y up). For the page that is `[pageW/2 - cx, cy - pageH/2]`, computed in
@@ -381,7 +391,7 @@ and entry.output exists
 ```
 
 `state.key` (built in `Glass3D.frame`) is: drawn size, layout size, `bg` (page position of the glass), border radius,
-corner exponent, frost, saturate, and the shape config. Because `bg` is in it, a glass that **stays on screen** while
+corner exponent, frost, saturate, lift, and the shape config. Because `bg` is in it, a glass that **stays on screen** while
 the page scrolls is redrawn every frame, and one that **scrolls with the page** is not (its `bg` doesn't change).
 That's the main reason a page of scrolling content with lots of glass costs nothing while it scrolls.
 
