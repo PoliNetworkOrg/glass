@@ -2,6 +2,7 @@ import { useReducedMotion } from "motion/react"
 import { useContext, useEffect, useMemo } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
+import { getRenderer } from "./3D/renderer"
 import { GlassLayerContext, GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import type { GlassPreset } from "./presets"
@@ -98,7 +99,9 @@ export function Glass(props: GlassProps) {
     enabled &&
     !optedOut &&
     inView &&
-    ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || Boolean(force3D))
+    ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || Boolean(force3D)) &&
+    // no WebGL2 (or a shader that did not compile): Glass3D renders the CSS glass itself, so this is the CSS path
+    getRenderer() !== null
   const do3D = wants3D && snapshot
 
   // the page is captured only while some glass is going to draw it

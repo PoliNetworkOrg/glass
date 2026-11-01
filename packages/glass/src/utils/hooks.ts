@@ -283,7 +283,7 @@ export function useIncreasedContrast() {
 /**
  * # useComputedStyle
  *
- * React hook to compute a value based on the computed style of a DOM element.
+ * React hook to compute a value based on the computed style of a DOM element, again whenever the element resizes.
  *
  * @param transform callback function to create a value from the computed style of the element
  * @returns a tuple, with a ref for the element whose style needs to be referenced and the transformed value
@@ -291,13 +291,22 @@ export function useIncreasedContrast() {
 export function useComputedStyle<T extends HTMLElement, R>(transform: (style: CSSStyleDeclaration) => R) {
   const ref = useRef<T | null>(null)
   const [computed, setComputed] = useState<R | null>(null)
+  const latest = useRef(transform)
+  latest.current = transform
 
   useLayoutEffect(() => {
-    if (ref.current) {
-      const style = window.getComputedStyle(ref.current)
-      const result = transform(style)
-      setComputed(result)
+    const el = ref.current
+    if (!el) return
+    // read again when the element resizes, as a percentage resolves against its size. The state is kept when the
+    // result is the same, so a resize that changes nothing renders nothing
+    const read = () => {
+      const result = latest.current(window.getComputedStyle(el))
+      setComputed((prev) => (prev && JSON.stringify(prev) === JSON.stringify(result) ? prev : result))
     }
+    read()
+    const observer = new ResizeObserver(read)
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [ref.current])
 
   return [ref, computed] as const
