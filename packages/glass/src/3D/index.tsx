@@ -66,6 +66,7 @@ export function Glass3D(props: Glass3DProps) {
           center: [cx, cy],
           lead,
           saturate: tint.saturate,
+          lift: tint.lift,
           uniforms: profileUniforms(
             w,
             h,
@@ -77,7 +78,7 @@ export function Glass3D(props: Glass3DProps) {
             shape,
             surface.frost
           ),
-          key: `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${tint.saturate} ${JSON.stringify(shape)}`,
+          key: `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${tint.saturate} ${tint.lift} ${JSON.stringify(shape)}`,
         }
       },
     })

@@ -47,6 +47,8 @@ export type GlassState = {
   lead: number
   /** The saturate() of the glass */
   saturate: number
+  /** The power its colors are raised to */
+  lift: number
   /** The profile, with the page as its backdrop */
   uniforms: GlassUniforms
   /** Everything about what it draws apart from what is behind it: when it is the same, so is what it draws */
@@ -85,6 +87,7 @@ const GLASS_UNIFORMS = [
   "uCurve",
   "uDispersion",
   "uSaturate",
+  "uLift",
 ]
 const BLUR_UNIFORMS = ["uSource", "uStep", "uSigma", "uRadius", "uEncoded"]
 const PAGE_UNIFORMS = ["uPage", "uPageSize", "uRegion", "uScroll"]
@@ -696,6 +699,7 @@ class GlassRenderer {
     gl.uniform1f(u.uCurve, g.curve)
     gl.uniform1f(u.uDispersion, g.dispersion)
     gl.uniform1f(u.uSaturate, state.saturate)
+    gl.uniform1f(u.uLift, state.lift)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
     entry.key = state.key

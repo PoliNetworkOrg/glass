@@ -1,4 +1,12 @@
-import { Glass, type GlassProps, glassColors, glassPresets, glassTints, withPreset } from "@polinetwork/glass"
+import {
+  Glass,
+  type GlassProps,
+  glassColors,
+  glassThemeTint,
+  glassPresets,
+  glassTints,
+  withPreset,
+} from "@polinetwork/glass"
 import { createContext, type KeyboardEvent, useContext } from "react"
 import { cn } from "@/lib/utils"
 
@@ -43,7 +51,13 @@ export function ShowGlass({ tone = "neutral", preset = "regular", className, chi
   const { dark, mode } = useContext(ShowcaseContext)
   const nested = useContext(NestedContext)
   const tinted = tone !== "neutral"
-  const options = tinted ? glassPresets.tinted : nested ? lensOptions(dark) : glassPresets[preset]
+  const options = tinted
+    ? glassPresets.tinted
+    : nested
+      ? lensOptions(dark)
+      : preset === "regular" && dark
+        ? withPreset("regular", { tint: glassThemeTint.dark })
+        : glassPresets[preset]
   const color = tinted ? glassTints[tone] : nested ? LENS_COLOR : dark ? glassColors.dark : glassColors.light
   return (
     <Glass

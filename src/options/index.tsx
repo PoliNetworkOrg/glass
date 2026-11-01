@@ -1,4 +1,11 @@
-import { type GlassPresetName, glassPresets, glassTints, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
+import {
+  type GlassPresetName,
+  glassThemeTint,
+  glassPresets,
+  glassTints,
+  type SceneConfig,
+  SceneConfigSchema,
+} from "@polinetwork/glass"
 import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -27,8 +34,12 @@ export function DemoOptions(props: {
     props.onChange?.(config)
   }, [config])
 
+  // the regular glass is tinted less in the dark theme, as Apple's is
+  const regularTint = (dark: boolean) => (dark ? glassThemeTint.dark : glassThemeTint.light)
+
   const handleDarkModeToggle = () => {
     props.onDarkModeChange?.(!props.isDarkMode)
+    if (preset === "regular") setConfig((c) => ({ ...c, tint: { ...c.tint, ...regularTint(!props.isDarkMode) } }))
   }
 
   const handlePreset = (name: GlassPresetName) => {
@@ -39,7 +50,7 @@ export function DemoOptions(props: {
       plane: { ...c.plane, ...p.plane },
       shape: { ...c.shape, ...p.shape },
       surface: { ...c.surface, ...p.surface },
-      tint: { ...c.tint, ...p.tint },
+      tint: { ...c.tint, ...p.tint, ...(name === "regular" && regularTint(Boolean(props.isDarkMode))) },
       edge: { ...c.edge, ...p.edge },
     }))
   }

@@ -16,7 +16,18 @@ export type GlassPreset = {
  */
 export const glassColors = Object.freeze({
   light: "#f8fafc",
-  dark: "#4d4d50",
+  dark: "#434345",
+} as const)
+
+/**
+ * The `tint` of the `regular` glass for a light and a dark interface. The dark glass of Apple's lets through more of
+ * what is behind it than the light one, and lifts its shadows: measured on Safari's toolbar in dark mode it turns
+ * black into `#1d1d1d`, near white into `#a5aaaf` and a page of `#030512` into `#262738`, which is the glass color
+ * at this opacity laid over the backdrop raised to the power of `lift`.
+ */
+export const glassThemeTint = Object.freeze({
+  light: { opacity: 0.66, lift: 1 },
+  dark: { opacity: 0.43, lift: 0.67 },
 } as const)
 
 /**

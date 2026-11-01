@@ -50,8 +50,12 @@ export const TintSchema = z
     saturate: z.number().min(0.5).max(3).default(1).meta({
       description: "Saturation of what is seen through the glass. Keeps a tint from dragging the hue of the backdrop.",
     }),
+    lift: z.number().min(0.25).max(1).default(1).meta({
+      description:
+        "Raises the dark of what is seen through the glass: its colors go to the power of this, so below 1 the shadows come up and the whites stay. Apple's dark glass is about 0.67.",
+    }),
   })
-  .default({ opacity: 0.66, saturate: 1 })
+  .default({ opacity: 0.66, saturate: 1, lift: 1 })
 
 export const EdgeSchema = z
   .object({

@@ -161,6 +161,8 @@ export const fragment = (encoded: boolean) => /* glsl */ `#version 300 es
   uniform float uDispersion;
   /** The saturate() of the glass, applied here and not as a filter on its canvas, which costs a pass every frame */
   uniform float uSaturate;
+  /** The power the colors are raised to, which lifts the shadows when below 1 */
+  uniform float uLift;
   in vec2 vPos;
   out vec4 fragColor;
 ${EDGE}
@@ -186,6 +188,7 @@ ${SATURATE}
 
     vec3 srgb = toSRGB(color);
     if (uSaturate != 1.0) srgb = saturateCss(srgb, uSaturate);
+    if (uLift != 1.0) srgb = pow(srgb, vec3(uLift));
     fragColor = vec4(srgb, 1.0);
   }
 `

@@ -1,4 +1,4 @@
-import { Glass, glassColors, glassPresets } from "@polinetwork/glass"
+import { Glass, glassColors, glassThemeTint, glassPresets, withPreset } from "@polinetwork/glass"
 import { useSyncExternalStore } from "react"
 import { cn } from "@/lib/utils"
 import { LENS_COLOR, lensOptions } from "./showcase/glass"
@@ -43,7 +43,9 @@ export function PagePicker({
   const route = useRoute()
   return (
     <Glass
-      options={lens ? lensOptions(dark) : glassPresets.regular}
+      options={
+        lens ? lensOptions(dark) : dark ? withPreset("regular", { tint: glassThemeTint.dark }) : glassPresets.regular
+      }
       color={lens ? LENS_COLOR : dark ? glassColors.dark : glassColors.light}
       force3D={force3D}
       disable3D={disable3D}
