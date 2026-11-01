@@ -25,8 +25,10 @@ export function DemoOptions(props: {
   tintColor?: string
   onTintColorChange?: (color: string) => void
 }) {
-  const defaultConfig = getDefaultValues(SceneConfigSchema)
-  const [config, setConfig] = useState<SceneConfig>(defaultConfig)
+  const [config, setConfig] = useState<SceneConfig>(() => {
+    const defaults = getDefaultValues(SceneConfigSchema)
+    return props.isDarkMode ? { ...defaults, tint: { ...defaults.tint, ...glassThemeTint.dark } } : defaults
+  })
   const [preset, setPreset] = useState<GlassPresetName>("regular")
   const [isVisible, setIsVisible] = useState(true)
 

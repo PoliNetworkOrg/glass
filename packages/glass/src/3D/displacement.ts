@@ -188,7 +188,7 @@ ${SATURATE}
 
     vec3 srgb = toSRGB(color);
     if (uSaturate != 1.0) srgb = saturateCss(srgb, uSaturate);
-    if (uLift != 1.0) srgb = pow(srgb, vec3(uLift));
+    if (uLift != 1.0) srgb = pow(max(srgb, 0.0), vec3(uLift));
     fragColor = vec4(srgb, 1.0);
   }
 `

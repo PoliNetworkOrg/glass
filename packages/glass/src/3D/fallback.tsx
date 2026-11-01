@@ -22,6 +22,37 @@ export type GlassFallbackProps = {
 const FROST_TO_BLUR = 1.5
 
 /**
+ * The `lift` of the 3D glass (the colors to the power of it) as the CSS filters that come closest, since a
+ * backdrop filter has no gamma: the line `c + a·x` that fits `x^lift` best, written as a `contrast()` and a
+ * `brightness()`, which can only scale and offset. The fit is by relative error, so that the shadows, which are what
+ * the lift is for and where a page that gets a dark glass mostly is, come out right and not washed to a gray.
+ */
+export function liftFilter(lift: number) {
+  if (lift >= 1) return ""
+  const samples = 64
+  let s = 0
+  let sx = 0
+  let sy = 0
+  let sxx = 0
+  let sxy = 0
+  for (let i = 0; i < samples; i++) {
+    const x = (i + 0.5) / samples
+    const y = x ** lift
+    const w = 1 / (y + 0.02) ** 2
+    s += w
+    sx += w * x
+    sy += w * y
+    sxx += w * x * x
+    sxy += w * x * y
+  }
+  const a = (s * sxy - sx * sy) / (s * sxx - sx * sx)
+  const c = (sy - a * sx) / s
+  // contrast(C) then brightness(K) is K·C·x + K·(1 - C)/2
+  const k = a + 2 * c
+  return ` contrast(${a / k}) brightness(${k})`
+}
+
+/**
  * # GlassFallback
  * The glass in CSS, for where the 3D one isn't drawn: it blurs, saturates and tints what is behind it the way the
  * 3D glass does (`surface.frost`, `tint`), but it can't bend it, which a backdrop filter has no way to do.
@@ -37,8 +68,8 @@ export function GlassFallback(props: GlassFallbackProps) {
   // the 3D glass sees the page blurred by the provider first, which the real page isn't
   const blur = Math.hypot(surface.frost * FROST_TO_BLUR, plane.blur)
 
-  // the light of a pressed glass goes on the backdrop too, after the blur and the saturation
-  const backdrop = `blur(${blur}px) saturate(${tint.saturate})${props.lit ? ` var(${LIT_VAR},)` : ""}`
+  // the light of a pressed glass goes on the backdrop too, after the blur, the saturation and the lift
+  const backdrop = `blur(${blur}px) saturate(${tint.saturate})${liftFilter(tint.lift)}${props.lit ? ` var(${LIT_VAR},)` : ""}`
 
   return (
     <motion.div

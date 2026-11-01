@@ -12,7 +12,8 @@ export type GlassPreset = {
 /**
  * Colors to give a `regular` or `clear` glass as its `color`, for a light and a dark interface: the neutral
  * glass of Apple's, as measured on its tab bar (over a page of `#1c1c1e` the dark one comes out at the same
- * gray as the bar does).
+ * gray as the bar does). The dark one is made to go with {@link glassThemeTint}`.dark`, which it was measured
+ * with: on its own, over the plain `regular` tint, it comes out darker than Apple's.
  */
 export const glassColors = Object.freeze({
   light: "#f8fafc",
@@ -66,21 +67,21 @@ export const glassPresets: Readonly<Record<GlassPresetName, Readonly<GlassPreset
     plane: { blur: 0 },
     shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
     surface: { frost: 2 },
-    tint: { opacity: 0.66, saturate: 1 },
+    tint: { opacity: 0.66, saturate: 1, lift: 1 },
     edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 0 },
   },
   clear: {
     plane: { blur: 0 },
     shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
     surface: { frost: 1 },
-    tint: { opacity: 0.35, saturate: 1.8 },
+    tint: { opacity: 0.35, saturate: 1.8, lift: 1 },
     edge: { rim: 0.6, stroke: 0.75, elevation: "default", shadow: 0.55, presence: 0 },
   },
   tinted: {
     plane: { blur: 0 },
     shape: { bezel: 16, shift: 25, curve: 2.5, scaling: 0.4, dispersion: 0 },
     surface: { frost: 2 },
-    tint: { opacity: 0.6, saturate: 1 },
+    tint: { opacity: 0.6, saturate: 1, lift: 1 },
     edge: { rim: 1, stroke: 1, elevation: "default", shadow: 1, presence: 1 },
   },
 })

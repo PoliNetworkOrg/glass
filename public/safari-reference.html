@@ -206,8 +206,8 @@
   });
   document.addEventListener("pointerdown", () => { if (raf) stop(); });
 
-  // Full-screen uniform greys, 2s each, 0 -> 255 in steps of 16 then back down in the other greys: a clean
-  // backdrop -> glass transfer curve. Tap to stop.
+  // Full-screen uniform greys, 2s each, 0 -> 255 in steps of 16, then round again: a clean backdrop -> glass
+  // transfer curve. Tap to stop.
   const step = document.getElementById("step");
   let timer = 0;
   const levels = [0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,255];

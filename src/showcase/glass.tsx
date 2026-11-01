@@ -36,7 +36,7 @@ const NestedContext = createContext(false)
 export const lensOptions = (dark: boolean) =>
   withPreset("clear", {
     surface: { frost: 0.5 },
-    tint: { opacity: dark ? 0.14 : 0.4, saturate: 1 },
+    tint: { opacity: dark ? 0.14 : 0.4, saturate: 1, lift: 1 },
     edge: { shadow: 0.5 },
   })
 export const LENS_COLOR = "#ffffff"
