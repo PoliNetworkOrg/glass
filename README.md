@@ -5,9 +5,9 @@ Liquid glass for the web: the page behind an element is captured as a texture an
 displacement profile fitted to Apple's Liquid Glass (WebGL2), with a CSS version where that can't be used.
 
 ```tsx
-import { Glass, GlassProvider, glassPresets, glassTints } from "@polinetwork/glass"
+import { Glass, GlassProvider, glassPresets, glassTints, withPreset } from "@polinetwork/glass"
 
-<GlassProvider deps={[theme]} blur={2}>
+<GlassProvider blur={2}>
   <Glass color="#F8FAFC" options={glassPresets.regular} className="rounded-3xl p-6">
     <h1>Hello Glass</h1>
   </Glass>
@@ -88,9 +88,9 @@ scrolling.
 `glassPresets` holds ready made options, and `withPreset` changes some of one:
 
 ```tsx
-<Glass options={glassPresets.clear} color="#F8FAFC" />
-<Glass options={glassPresets.tinted} color={glassTints.blue} />
-<Glass options={withPreset("tinted", { tint: { opacity: 0.5 } })} color="#3b6175" />
+<Glass options={glassPresets.clear} color="#F8FAFC">…</Glass>
+<Glass options={glassPresets.tinted} color={glassTints.blue}>…</Glass>
+<Glass options={withPreset("tinted", { tint: { opacity: 0.5 } })} color="#3b6175">…</Glass>
 ```
 
 | | |
@@ -111,7 +111,9 @@ the `tint` of `regular` for both interfaces (`light`: opacity 0.66, lift 1; `dar
 <Glass
   options={withPreset("regular", { tint: glassThemeTint.dark })}
   color={glassColors.dark}
-/>
+>
+  …
+</Glass>
 ```
 
 `glassColors.dark` is measured with that tint: over the plain `regular` one it comes out darker than Apple's. The CSS
