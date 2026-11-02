@@ -6,28 +6,37 @@ let parser: CanvasRenderingContext2D | null | undefined
 /**
  * The red, green and blue of a CSS color, 0 to 1, in linear light, which is how three.js held them, and so how the
  * theme of a glass has been told from its color. A 2D canvas reads any CSS color the browser does (a name, `hsl()`) and
- * gives it back as hex or `rgba()`; without a document only those two are read.
+ * is read back as pixels; without a document only hex and `rgb()` are read.
  */
 function linearRgb(color: string): [number, number, number] | null {
   const cached = parsed.get(color)
   if (cached !== undefined) return cached
 
-  let css = color.trim()
+  const css = color.trim()
+  let srgb: number[] | null = null
   if (typeof document !== "undefined") {
-    parser ??= document.createElement("canvas").getContext("2d")
+    if (parser === undefined) {
+      const canvas = document.createElement("canvas")
+      canvas.width = canvas.height = 1
+      parser = canvas.getContext("2d", { willReadFrequently: true })
+    }
     if (parser) {
+      // one pixel read back is sRGB whatever the syntax of the color (`oklch()`, `lab()`, `color()`)
+      parser.clearRect(0, 0, 1, 1)
       parser.fillStyle = "#000"
       parser.fillStyle = css
-      css = String(parser.fillStyle)
+      parser.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = parser.getImageData(0, 0, 1, 1).data
+      if (a > 0) srgb = [r, g, b].map((v) => v / 255)
     }
   }
-  let srgb: number[] | null = null
-  const hex = /^#([\da-f]{3}|[\da-f]{6})(?:[\da-f]{2})?$/i.exec(css)
+  // without a document (or a canvas) only hex and rgb() are read
+  const hex = srgb ? null : /^#([\da-f]{3}|[\da-f]{6})(?:[\da-f]{2})?$/i.exec(css)
   if (hex) {
     const digits = hex[1].length === 3 ? [...hex[1]].map((d) => d + d).join("") : hex[1]
     const n = Number.parseInt(digits, 16)
     srgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255)
-  } else {
+  } else if (!srgb) {
     const rgb = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i.exec(css)
     if (rgb) srgb = [rgb[1], rgb[2], rgb[3]].map((v) => Number(v) / 255)
   }
