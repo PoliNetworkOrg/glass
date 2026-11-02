@@ -99,7 +99,8 @@ export function Glass(props: GlassProps) {
     enabled &&
     !optedOut &&
     inView &&
-    ((!disable3D && !reducedMotion && !increasedContrast && capable === true) || Boolean(force3D)) &&
+    !disable3D &&
+    ((!reducedMotion && !increasedContrast && capable === true) || Boolean(force3D)) &&
     // no WebGL2 (or a shader that did not compile): Glass3D renders the CSS glass itself, so this is the CSS path
     getRenderer() !== null
   const do3D = wants3D && snapshot

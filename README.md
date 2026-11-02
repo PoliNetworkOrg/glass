@@ -46,7 +46,7 @@ A `div` (it takes the usual props) with the glass drawn behind its children.
 | `claimTouch` | For an interactive glass above the content (a fixed header, a popover): a touch on it never scrolls what is under it. Otherwise a touch on the glass still scrolls the page, and the press carries on while it does. |
 | `layer` | The [layer](#layers) of the glass. Default: the one of the `<GlassLayer>` it is in, or 0. |
 | `force3D` | Draw the 3D glass even where the device was judged too slow for it, or the user asked for less motion. |
-| `disable3D` | Always use the CSS glass. |
+| `disable3D` | Always use the CSS glass, even with `force3D`. |
 
 The CSS glass has the same blur (`surface.frost` and `plane.blur`), saturation and tint as the 3D one, so the three
 presets look alike in both, but it can't bend what is behind it: a CSS backdrop filter has no displacement. It is used
