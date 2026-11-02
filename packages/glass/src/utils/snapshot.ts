@@ -413,6 +413,8 @@ async function copyState(page: HTMLElement, copy: HTMLElement) {
   // a clone has the same elements in the same order, so the nth match in one is the nth in the other
   const pageImages = page.querySelectorAll("img")
   const copyImages = copy.querySelectorAll("img")
+  // a <source> of a <picture> is chosen over the src of its <img>, and its url isn't loaded in the picture
+  for (const source of copy.querySelectorAll("picture > source")) source.remove()
   const images = [...pageImages].map(async (img, i) => {
     const clone = copyImages[i]
     clone.removeAttribute("srcset")
