@@ -89,8 +89,14 @@ export const glassPresets: Readonly<Record<GlassPresetName, Readonly<GlassPreset
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
+/** A copy of the plain objects of a value, so what is built from a preset never shares a section with it */
+function clone<T>(value: T): T {
+  if (!isPlainObject(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([key, v]) => [key, clone(v)])) as T
+}
+
 function merge<T>(base: T, override: unknown): T {
-  if (!isPlainObject(base) || !isPlainObject(override)) return (override === undefined ? base : override) as T
+  if (!isPlainObject(base) || !isPlainObject(override)) return (override === undefined ? clone(base) : override) as T
   const out: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(override)) out[key] = merge(out[key], value)
   return out as T
