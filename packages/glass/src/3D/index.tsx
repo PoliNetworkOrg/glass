@@ -1,81 +1,105 @@
-import { AdaptiveDpr, AdaptiveEvents, Preload, Stats } from "@react-three/drei"
-import { Canvas, invalidate } from "@react-three/fiber"
-import { motion, useMotionValueEvent, useTransform } from "motion/react"
-import { useCallback, useMemo } from "react"
-import { OrthographicCamera, type Texture } from "three"
-// import { useFailCondition } from "../utils/hooks"
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { frameScroll } from "../utils/frames"
+import { createPredictor } from "../utils/predict"
+import type { Snapshot } from "../utils/snapshot"
+import { profileUniforms } from "./displacement"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
-import { SceneLights } from "./lights"
-import { GlassMesh } from "./mesh"
-import { BGPlane } from "./plane"
+import { getRenderer } from "./renderer"
 
 export type Glass3DProps = GlassFallbackProps & {
-  texture: Texture
+  /** The picture of the page, which is what gets bent */
+  snapshot: Snapshot
+  /** How far ahead, in ms, the page is drawn while it moves under the glass */
+  scrollLead?: number
+  /** The layer of the glass: the glass of a higher layer bends the glass below it, see `layer` of the glass */
+  layer?: number
+  /** The element of the glass, whose picture is what the glass of a higher layer sees of it over its glass */
+  element: RefObject<HTMLElement | null>
 }
 
-const MotCanv = motion.create(Canvas)
-
+/**
+ * # Glass3D
+ * The glass in WebGL: a canvas the size of the box of the element, which the shared renderer draws the page into, bent
+ * at the rim. It is drawn on screen by the element's transform (a press scales it), so the view it shows is as big as
+ * the element is drawn, which makes a pixel of the picture a pixel of the screen.
+ *
+ * Where the device has no WebGL2 it is the CSS glass.
+ */
 export function Glass3D(props: Glass3DProps) {
-  // const [isSuspended, setIsSuspended] = useState(true)
-  const { lighting, material, plane } = props.scene
-  // const gpu = useDetectGPU({
-  //   failIfMajorPerformanceCaveat: true,
-  // })
-  // useFailCondition(() => gpu.tier < 2)
+  const renderer = useMemo(getRenderer, [])
+  const canvas = useRef<HTMLCanvasElement>(null)
 
-  // const texture = suspend(getTexture, [document.documentElement, 0])
-  const texture = props.texture
+  // Read on every frame, outside of React. It is handed over as soon as it is committed, before the provider frees the
+  // picture it replaces (in an effect, after this one)
+  const current = useRef(props)
+  useLayoutEffect(() => {
+    current.current = props
+  })
 
-  const width = useTransform(() => props.bounds.get().width)
-  const height = useTransform(() => props.bounds.get().height)
+  useEffect(() => {
+    const el = canvas.current
+    if (!renderer || !el) return
+    const predict = createPredictor()
+    return renderer.add({
+      canvas: el,
+      frame: (time) => {
+        const p = current.current
+        const element = p.element.current
+        const { width: w, height: h, layoutWidth, layoutHeight, left, top } = p.bounds.get()
+        if (!element || w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return null
+        const lead = p.scrollLead ?? 0
+        // Where the center of the glass is on the page, and where it will be when this frame is on screen. It is what
+        // moves with the scroll for a glass that stays in place on the screen, and what doesn't for one that scrolls
+        // with the page, which is drawn in place by the browser itself.
+        const [cx, cy] = predict(time, frameScroll.x + left + w / 2, frameScroll.y + top + h / 2, lead)
+        // Where the center of the page is, from the center of the glass, y up: that much to its left, and the same
+        // distance above it. The two come out with opposite signs because y up is the other way from the page's.
+        const bg: [number, number] = [p.snapshot.width / 2 - cx, cy - p.snapshot.height / 2]
+        const { shape, surface, tint } = p.scene
+        return {
+          snapshot: p.snapshot,
+          layer: p.layer ?? 0,
+          element,
+          width: Math.floor(layoutWidth),
+          height: Math.floor(layoutHeight),
+          drawn: [w, h],
+          center: [cx, cy],
+          lead,
+          saturate: tint.saturate,
+          lift: tint.lift,
+          uniforms: profileUniforms(
+            w,
+            h,
+            layoutWidth,
+            layoutHeight,
+            bg,
+            p.borderRadius,
+            p.cornerExponent ?? 2,
+            shape,
+            surface.frost
+          ),
+          key: `${w} ${h} ${layoutWidth} ${layoutHeight} ${bg[0]} ${bg[1]} ${p.borderRadius} ${p.cornerExponent} ${surface.frost} ${tint.saturate} ${tint.lift} ${JSON.stringify(shape)}`,
+        }
+      },
+    })
+  }, [renderer])
 
-  const camera = useMemo(() => {
-    const w = width.get()
-    const h = height.get()
-    const camera = new OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.01, 2048)
-    camera.position.set(0, 0, 512)
-    return camera
-  }, [width, height])
-
-  const updateCamera = useCallback(() => {
-    invalidate()
-    const w = width.get()
-    const h = height.get()
-    camera.left = -w / 2
-    camera.right = w / 2
-    camera.top = h / 2
-    camera.bottom = -h / 2
-    camera.updateProjectionMatrix()
-  }, [camera, width, height])
-
-  useMotionValueEvent(width, "change", updateCamera)
-  useMotionValueEvent(height, "change", updateCamera)
+  if (!renderer) return <GlassFallback {...props} />
 
   return (
-    <MotCanv
-      orthographic
-      flat
-      fallback={<GlassFallback {...props} />}
-      dpr={1}
-      camera={camera}
-      frameloop="demand"
+    <canvas
+      ref={canvas}
       style={{
+        display: "block",
         width: "100%",
         height: "100%",
         margin: "auto",
         borderRadius: 5,
         zIndex: -1,
-        overflow: "hidden",
-        boxShadow: `0 0 8px rgba(0, 0, 0, 0.1)`,
+        // nothing in it is interactive
+        pointerEvents: "none",
+        boxShadow: "0 0 8px rgba(0, 0, 0, 0.1)",
       }}
-    >
-      <Stats showPanel={1} />
-      <AdaptiveDpr />
-      <AdaptiveEvents />
-      <SceneLights settings={lighting} />
-      <GlassMesh color={props.color} width={width} height={height} borderRadius={16} options={material} />
-      <BGPlane texture={texture} bounds={props.bounds} options={plane} />
-      <Preload all />
-    </MotCanv>
+    />
   )
 }
