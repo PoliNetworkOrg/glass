@@ -414,7 +414,11 @@ async function copyState(page: HTMLElement, copy: HTMLElement) {
   const pageImages = page.querySelectorAll("img")
   const copyImages = copy.querySelectorAll("img")
   // a <source> of a <picture> is chosen over the src of its <img>, and its url isn't loaded in the picture
-  for (const source of copy.querySelectorAll("picture > source")) source.remove()
+  // (the element stays, so the rules that look at its place in the <picture> still match the <img>)
+  for (const source of copy.querySelectorAll("picture > source")) {
+    source.removeAttribute("srcset")
+    source.removeAttribute("src")
+  }
   const images = [...pageImages].map(async (img, i) => {
     const clone = copyImages[i]
     clone.removeAttribute("srcset")
