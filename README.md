@@ -5,7 +5,7 @@ Liquid glass for the web: the page behind an element is captured as a texture an
 displacement profile fitted to Apple's Liquid Glass (WebGL2), with a CSS version where that can't be used.
 
 ```tsx
-import { Glass, GlassProvider, glassPresets, glassTints, withPreset } from "@polinetwork/glass"
+import { Glass, GlassProvider, glassColors, glassPresets, glassThemeTint, glassTints, withPreset } from "@polinetwork/glass"
 
 <GlassProvider blur={2}>
   <Glass color="#F8FAFC" options={glassPresets.regular} className="rounded-3xl p-6">
