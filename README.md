@@ -41,7 +41,7 @@ A `div` (it takes the usual props) with the glass drawn behind its children.
 | --- | --- |
 | `options` | The [configuration](#configuration) of the glass, or a [preset](#presets). |
 | `color` | The color of the glass: laid over it by `tint.opacity`, and the base of the CSS version. For `regular` and `clear` use `glassColors.light` or `glassColors.dark`, the neutral glass measured on Apple's tab bar. In a dark interface also give `regular` the `glassThemeTint.dark` tint (see [Dark glass](#dark-glass)). |
-| `theme` | `light` or `dark`, which sets the light on the edges. By default it follows the lightness of `color`. |
+| `theme` | `light` or `dark`, which sets the light on the edges. By default it follows the lightness of `color`, which must then be a literal CSS color: a `var()` is not resolved, so give a `theme` with one. |
 | `interactive` | For glass that is a control. It lifts on hover (1.045), snaps down (0.94) and is lit (brighter, more saturated) while pressed, and when dragged it stretches toward the pointer with an elastic falloff and squashes across, then springs back. A drag is a gesture, so the click that would follow it is swallowed (a tap still clicks). A press that starts on a link or button inside the glass is theirs. With `prefers-reduced-motion` it doesn't move, and is only lit. Default `false`. |
 | `claimTouch` | For an interactive glass above the content (a fixed header, a popover): a touch on it never scrolls what is under it. Otherwise a touch on the glass still scrolls the page, and the press carries on while it does. |
 | `layer` | The [layer](#layers) of the glass. Default: the one of the `<GlassLayer>` it is in, or 0. |
