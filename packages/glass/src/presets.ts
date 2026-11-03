@@ -97,7 +97,7 @@ function clone<T>(value: T): T {
 
 function merge<T>(base: T, override: unknown): T {
   if (!isPlainObject(base) || !isPlainObject(override)) return (override === undefined ? clone(base) : override) as T
-  const out: Record<string, unknown> = { ...base }
+  const out: Record<string, unknown> = clone(base)
   for (const [key, value] of Object.entries(override)) out[key] = merge(out[key], value)
   return out as T
 }
