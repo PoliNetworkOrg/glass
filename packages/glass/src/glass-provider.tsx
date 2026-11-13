@@ -13,9 +13,10 @@ export type GlassProviderProps = {
   /**
    * How far ahead, in ms, the 3D glass draws the page while the page moves under it. The browser tells the page that
    * it scrolled a frame after it did, so the glass draws the page a frame behind where it is: a lead draws it where it
-   * is going, at the speed it is moving. Default: 0, where the browser says. The speed reads late as a scroll starts
-   * and stops, so a lead trails, then overshoots the page there, which shows more than a lag that holds still: a frame
-   * of the display (8ms at 120Hz, 16ms at 60Hz) is right while moving, more overshoots all the time
+   * is going, at the speed it is moving, and only once it moves fast (a slow scroll is drawn where the browser says).
+   * Default: a frame of the display (measured) while a finger scrolls the page, and 0 while a wheel does. A flick slows
+   * down smoothly, which a lead follows; a wheel stops dead, which a lead overshoots, so there the lag that holds still
+   * shows less. A number sets the lead for every input, and 0 turns it off
    */
   scrollLead?: number
 }
@@ -36,7 +37,7 @@ export function GlassProvider(props: GlassProviderProps) {
     return () => setWanted((n) => n - 1)
   }, [])
   const snapshot = usePageSnapshot(props.deps, props.blur, enabled && wanted > 0)
-  const scrollLead = props.scrollLead ?? 0
+  const scrollLead = props.scrollLead
   const value = useMemo(() => ({ snapshot, enabled, want, scrollLead }), [snapshot, enabled, want, scrollLead])
   return <GlassContext.Provider value={value}>{props.children}</GlassContext.Provider>
 }

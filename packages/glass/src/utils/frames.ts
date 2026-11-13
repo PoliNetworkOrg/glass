@@ -14,8 +14,37 @@ let frame = 0
  */
 export const frameScroll = { x: 0, y: 0 }
 
+/** How long a frame of the display is, in ms, smoothed over the last frames */
+let frameTime = 1000 / 60
+let lastTime = 0
+/** What last scrolled the page: a finger, or a wheel (a mouse's or a trackpad's) */
+let input: "touch" | "wheel" | null = null
+const onTouch = () => {
+  input = "touch"
+}
+const onWheel = () => {
+  input = "wheel"
+}
+
+/**
+ * How far ahead, in ms, the glass draws the page while it moves, when the provider doesn't say: a frame of the display
+ * while a finger scrolls the page, and nothing while a wheel does.
+ *
+ * The browser tells the page it scrolled a frame after it did, so a frame is what the glass is behind. A flick slows
+ * down smoothly, which a lead follows well, while a wheel stops dead, which a lead overshoots: there a frame behind,
+ * which holds still, shows less. Before any input, a device whose pointer is a finger counts as touch.
+ */
+export function autoLead() {
+  const touch = input === null ? matchMedia("(pointer: coarse)").matches : input === "touch"
+  return touch ? frameTime : 0
+}
+
 function tick(time: number) {
   frame = requestAnimationFrame(tick)
+  // a frame longer than this is a dropped frame or a pause, not the length of one
+  const dt = time - lastTime
+  if (lastTime > 0 && dt > 4 && dt < 40) frameTime += (dt - frameTime) * 0.1
+  lastTime = time
   frameScroll.x = window.scrollX
   frameScroll.y = window.scrollY
   // everything is read before anything is written, so a glass that redraws doesn't force a layout for the next one
@@ -30,13 +59,20 @@ function tick(time: number) {
 }
 
 function startLoop() {
-  if (!frame) frame = requestAnimationFrame(tick)
+  if (!frame) {
+    frame = requestAnimationFrame(tick)
+    window.addEventListener("touchstart", onTouch, { passive: true, capture: true })
+    window.addEventListener("wheel", onWheel, { passive: true, capture: true })
+  }
 }
 
 function stopLoopIfIdle() {
   if (watchers.size === 0 && drawers.size === 0) {
     cancelAnimationFrame(frame)
     frame = 0
+    lastTime = 0
+    window.removeEventListener("touchstart", onTouch, { capture: true })
+    window.removeEventListener("wheel", onWheel, { capture: true })
   }
 }
 

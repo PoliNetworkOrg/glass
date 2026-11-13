@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { frameScroll } from "../utils/frames"
+import { autoLead, frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
 import type { Snapshot } from "../utils/snapshot"
 import { profileUniforms } from "./displacement"
@@ -9,7 +9,7 @@ import { getRenderer } from "./renderer"
 export type Glass3DProps = GlassFallbackProps & {
   /** The picture of the page, which is what gets bent */
   snapshot: Snapshot
-  /** How far ahead, in ms, the page is drawn while it moves under the glass */
+  /** How far ahead, in ms, the page is drawn while it moves under the glass. Unset, see `autoLead` */
   scrollLead?: number
   /** The layer of the glass: the glass of a higher layer bends the glass below it, see `layer` of the glass */
   layer?: number
@@ -47,7 +47,7 @@ export function Glass3D(props: Glass3DProps) {
         const element = p.element.current
         const { width: w, height: h, layoutWidth, layoutHeight, left, top } = p.bounds.get()
         if (!element || w <= 0 || h <= 0 || layoutWidth <= 0 || layoutHeight <= 0) return null
-        const lead = p.scrollLead ?? 0
+        const lead = p.scrollLead ?? autoLead()
         // Where the center of the glass is on the page, and where it will be when this frame is on screen. It is what
         // moves with the scroll for a glass that stays in place on the screen, and what doesn't for one that scrolls
         // with the page, which is drawn in place by the browser itself.

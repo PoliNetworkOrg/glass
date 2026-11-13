@@ -21,6 +21,11 @@ import { GlassButton, type GlassMode, modeProps, Segmented, ShowcaseContext, Sho
 import { type OrbCount, Orbs, PerfPanel } from "./perf"
 import { gallery, moods, photos } from "./photos"
 
+// How far ahead the glass draws the page while it scrolls, in ms, to tune it on a device: `?lead=0` turns it off, and
+// without it the glass has its default
+const leadParam = new URLSearchParams(window.location.search).get("lead")
+const scrollLead = leadParam === null ? undefined : Number(leadParam) || 0
+
 // A page made with the glass, the way an app would use it (a floating header, controls over photos, a player, a tab
 // bar), as a magazine about cats. It is also the place to see what the glass costs, with as much of it on screen as a real page has, and more.
 
@@ -424,7 +429,7 @@ export function Showcase() {
 
   return (
     <ShowcaseContext.Provider value={context}>
-      <GlassProvider deps={[dark, mood]}>
+      <GlassProvider deps={[dark, mood]} scrollLead={scrollLead}>
         <div className={dark ? "dark" : ""}>
           <div className="min-h-screen bg-background text-foreground">
             {/* the fixed parts float over the glass of the page as it scrolls, so they are on a layer above it */}

@@ -6,23 +6,31 @@
 // there, ahead by about the time it is late.
 //
 // What the browser says is rough: whole pixels, and at slow speeds frames with no news at all, then two frames' worth.
-// The speed is a line fitted to the last tenth of a second of it, and the lead is added to where the browser says the
-// point is. Ahead is only worth it where the lag shows: a slow scroll, the one to look at the glass closely, is drawn
-// where the browser says, and the lead comes in with the speed.
+// The speed comes from a curve (a parabola) fitted to the last 80ms of it, read at the latest point, so it follows a
+// flick as it speeds up and slows down instead of reading the speed of half a window ago, as a straight line does; and
+// the lead is added to where the browser says the point is. Ahead is only worth it where the lag shows: a slow
+// scroll, the one to look at the glass closely, is drawn where the browser says, and the lead comes in with the speed.
 //
-// It is off by default (a lead of 0): a speed always reads late as a scroll starts and stops, so the glass trails, then
-// overshoots, and that swing shows far more than a lag that holds still. Measured in Chrome at 120Hz during a 2000px/s
-// scroll that stops dead: a steady 15px behind with no lead, against 0px while moving with 8ms of lead but 29px behind
-// as it starts and 13px past as it stops.
+// A speed always reads somewhat late as a scroll starts and stops, so the glass trails, then overshoots, and where a
+// scroll stops dead that swing shows more than a lag that holds still. Measured in Chrome at 120Hz during a 2000px/s
+// wheel scroll that stops dead: a steady 15px behind with no lead, against 0px while moving with 8ms of lead but 29px
+// behind as it starts and 13px past as it stops. So by default the lead is a frame only for touch, whose flicks slow
+// down smoothly, and none for a wheel (`autoLead` in frames.ts).
 
 /** An instantaneous speed past this, in px per ms, is a jump (an anchor, a scrollTo) and not a scroll, and isn't followed */
 const MAX_SPEED = 12
-/** How far back the line is fitted, in ms */
-const WINDOW = 100
+/**
+ * How far back the curve is fitted, in ms. Shorter follows a flick sooner but shakes more, from the whole pixels: in a
+ * simulated flick at 60Hz, 100ms overshot by 20px as the finger let go and 60ms by 12px, but shook 1.9px a frame against
+ * 1.2px, and 80ms is between the two
+ */
+const WINDOW = 80
 /** How long without moving is a stop, in ms */
 const STILL = 50
 /** A frame without news, in ms: it is taken for a late report and not yet for a stop */
 const QUIET = 25
+/** How far, in px, it would have gone in a frame without news for that frame to be a stop and not a late report */
+const MISSED = 3
 /** Under this speed, in px per ms, nothing is predicted, and from it to `FAST` the lead comes in */
 const SLOW = 0.25
 const FAST = 0.8
@@ -33,24 +41,41 @@ const ramp = (speed: number) => {
   return t * t * (3 - 2 * t)
 }
 
-/** The line fitted to `samples` (time, position): where it is at `time`, and its slope */
-function fit(samples: [number, number][], time: number): [number, number] {
-  let st = 0
+/**
+ * The speed at the last of `samples` (time, position), from the parabola fitted to them by least squares, or from the
+ * line where there are too few for a parabola to mean anything
+ */
+function fit(samples: [number, number][]): number {
+  const n = samples.length
+  const [t0, p0] = samples[n - 1]
+  // the sums of the normal equations, in time from the last sample so the numbers stay small
+  let s1 = 0
+  let s2 = 0
+  let s3 = 0
+  let s4 = 0
   let sp = 0
+  let s1p = 0
+  let s2p = 0
   for (const [t, p] of samples) {
-    st += t
-    sp += p
+    const u = t - t0
+    const q = p - p0
+    s1 += u
+    s2 += u * u
+    s3 += u * u * u
+    s4 += u * u * u * u
+    sp += q
+    s1p += u * q
+    s2p += u * u * q
   }
-  const mt = st / samples.length
-  const mp = sp / samples.length
-  let num = 0
-  let den = 0
-  for (const [t, p] of samples) {
-    num += (t - mt) * (p - mp)
-    den += (t - mt) ** 2
+  if (n >= 4) {
+    // [n s1 s2; s1 s2 s3; s2 s3 s4] [c0 c1 c2] = [sp s1p s2p], by Cramer for c1, the slope at the last sample
+    const det = n * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s3 * s2) + s2 * (s1 * s3 - s2 * s2)
+    if (Math.abs(det) > 1e-9) {
+      return (n * (s1p * s4 - s3 * s2p) - sp * (s1 * s4 - s3 * s2) + s2 * (s1 * s2p - s1p * s2)) / det
+    }
   }
-  const slope = den > 0 ? num / den : 0
-  return [mp + slope * (time - mt), slope]
+  const den = n * s2 - s1 * s1
+  return den > 0 ? (n * s1p - s1 * sp) / den : 0
 }
 
 /**
@@ -64,13 +89,18 @@ export function createPredictor() {
   const last = { t: 0, x: 0, y: 0, moved: 0 }
 
   return (time: number, x: number, y: number, lead: number): [number, number] => {
-    if (last.t === 0 || x !== last.x || y !== last.y) last.moved = time
-    // a jump starts over, as does a pause long enough for the window to be empty
+    const moving = last.t === 0 || x !== last.x || y !== last.y
     const dt = Math.max(1, time - last.t)
+    // A jump starts over. So does a start after a stop: only the last still frame is kept, so the speed isn't read off a
+    // window that is mostly standing still, which had the glass trail a flick by a few frames' worth as it started.
     if (last.t > 0 && Math.hypot(x - last.x, y - last.y) / dt > MAX_SPEED) {
       xs.length = 0
       ys.length = 0
+    } else if (moving && last.t > 0 && last.t - last.moved >= STILL) {
+      xs.splice(0, xs.length - 1)
+      ys.splice(0, ys.length - 1)
     }
+    if (moving) last.moved = time
     last.t = time
     last.x = x
     last.y = y
@@ -82,17 +112,23 @@ export function createPredictor() {
     }
 
     // Without a lead it is where the browser says, as it is: a frame behind, by the same amount for as long as the speed
-    // holds, which the eye doesn't see. The line is only for the speed. Drawn where the line is, the glass trailed the
-    // page as a scroll started and ran past it as it stopped (the line bends late), a swing of up to 40px in a few
+    // holds, which the eye doesn't see. The fit is only for the speed. Drawn where a fitted line is, the glass trailed
+    // the page as a scroll started and ran past it as it stopped (the line bends late), a swing of up to 40px in a few
     // frames that read as a bounce on every turn of a mouse wheel.
     const since = time - last.moved
-    if (lead <= 0 || since >= STILL || xs.length < 3) return [x, y]
-    const [, vx] = fit(xs, time)
-    const [, vy] = fit(ys, time)
-    const k = lead * ramp(Math.hypot(vx, vy))
-    // A frame without news is a late report or a stop, which there is no telling apart yet: the first is let be, and
-    // from the second what is ahead of where it was fades out, so a scroll that stops dead doesn't overshoot for long
-    const fade = since < QUIET ? 1 : Math.max(0, 1 - (since - QUIET) / (STILL - QUIET))
+    if (lead <= 0 || since >= STILL || xs.length < 2) return [x, y]
+    const vx = fit(xs)
+    const vy = fit(ys)
+    const speed = Math.hypot(vx, vy)
+    const k = lead * ramp(speed)
+    // A frame without news is a late report or a stop. Slow, there is no telling them apart yet: the first is let be,
+    // and from the second what is ahead fades out, so a stop doesn't overshoot for long. Fast, the page would have moved
+    // a few px in that time, and the browser reports every frame of that: it stopped (a finger caught a flick), so
+    // nothing is drawn ahead from that frame on.
+    const fade =
+      since > 0 && speed * since > MISSED ? 0 : since < QUIET ? 1 : Math.max(0, 1 - (since - QUIET) / (STILL - QUIET))
+    // Ahead at that speed. Not along the curve: it keeps the acceleration of the finger past the moment it lets go, and
+    // overshot there by twice as much
     return [x + vx * k * fade, y + vy * k * fade]
   }
 }

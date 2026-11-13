@@ -53,7 +53,7 @@ capture, and why glass can't see other glass without the [layer](#layers) machin
 | `edge.tsx` | `GlassEdge` (rim and stroke) and `GlassShadow`, shared by both versions. |
 | `utils/snapshot.ts` | `snapshot()` (the page) and `snapshotElement()` (one element, for layers). |
 | `utils/hooks.ts` | `usePageSnapshot`, `useMotionBounds`, `useInView`, `useComputedStyle`, `useIncreasedContrast`. |
-| `utils/frames.ts` | The one `requestAnimationFrame` loop: read, commit, draw. |
+| `utils/frames.ts` | The one `requestAnimationFrame` loop: read, commit, draw. Also the frame time and last scroll input behind `autoLead()`. |
 | `utils/predict.ts` | Scroll prediction (`createPredictor`). |
 | `utils/capability.ts` | One-off GPU benchmark whose verdict is cached in `localStorage`. |
 | `utils/press.ts` | Hover, press and drag for `interactive` glass. Writes `translate`, `scale` and `--glass-lit` directly. |
@@ -362,18 +362,26 @@ Only the glasses that were drawn *this frame* go through `show()`; the others ke
 ## Scroll prediction
 
 Browsers scroll off the page's thread and tell the page about it a frame later. The page under a glass that stays on
-screen is therefore drawn where it *was*, a frame behind. By default (`scrollLead` 0) that is left as it is: the glass
-uses the scroll position as the browser reports it, and the lag holds still while the speed does, which the eye
-barely sees. `utils/predict.ts` can draw it ahead instead:
+screen is therefore drawn where it *was*, a frame behind. `utils/predict.ts` draws it ahead, by a lead in ms. With
+`scrollLead` unset the lead comes from `autoLead()` in `utils/frames.ts`: a frame of the display (the rAF interval,
+smoothed) when the last scroll input was a `touchstart`, and 0 when it was a `wheel` (before any input, a coarse
+pointer counts as touch). A flick decelerates smoothly, which the lead follows; a wheel stops dead, which it overshoots,
+so there the glass uses the scroll position as reported, and the lag holds still while the speed does. The predictor:
 
-- keep the last 100ms of `(time, position)` and fit a **line** (least squares) for the **speed**; the lead is added to
-  the position as the browser reports it, not to where the line is (the line bends late, so drawn where it is, the
-  glass trailed the page by up to 40px as a scroll started and ran past it as it stopped, even with no lead);
+- keep the last 80ms of `(time, position)` and fit a **parabola** (least squares) for the **speed**, read at the latest
+  sample: a line's slope is the speed of half a window ago, so it trailed a flick as it sped up (in a simulated 60Hz
+  flick, by 35px against 18px). Only the speed is used: the lead is added to the position as the browser reports it,
+  not to where the curve is (a fitted line bends late, so drawn where it is, the glass trailed the page by up to 40px as
+  a scroll started and ran past it as it stopped, even with no lead), and not along the curve either (it carries the
+  finger's acceleration past the release);
+- a scroll that starts after a stop (50ms still) drops the still samples from the window, which would otherwise read as
+  a slower speed;
 - the lead is `scrollLead * ramp(speed)`: nothing under 0.25px/ms, full at 0.8px/ms, smoothstep in between, so a slow
   scroll (the one you inspect the glass in) is drawn exactly and the lead comes in with speed;
 - a jump over 12px/ms (`scrollTo`, anchor) resets the window and isn't followed;
-- a frame without news for 25ms is treated as a late report and left; after that the lead fades out by 50ms, so a
-  stop doesn't overshoot for long.
+- a frame without news is a stop when at the speed read the point would have moved more than 3px in that time (a finger
+  catching a flick): the lead drops at once. Slower, it may be a late report: one for 25ms is left; after that the lead
+  fades out by 50ms, so a stop doesn't overshoot for long.
 
 There are two predictors with different meanings. In `renderer.draw()` one predicts the **page scroll** (used for layers,
 which work in screen space). In `Glass3D.frame()` each glass has its own that predicts its **page position**
@@ -381,7 +389,8 @@ which work in screen space). In `Glass3D.frame()` each glass has its own that pr
 with the page it doesn't move at all, so no prediction is applied, which is right because the browser moves it itself.
 Measured in Chrome at 120Hz during a 2000px/s scroll that stops dead: no lead holds a steady 15px (a frame) behind;
 8ms of lead is within a px while moving, but trails by up to 29px as it starts and overshoots by 13px as it stops,
-which is why it is off by default. A lead is in ms but the lag is a frame, so it is only right for one refresh rate.
+which is why a wheel gets no lead by default. The lag is a frame and not a fixed time, which is why the automatic lead is
+the measured frame and not a number of ms.
 
 ## When a glass is redrawn
 
