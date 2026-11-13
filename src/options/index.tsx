@@ -1,11 +1,17 @@
-import { type GlassConfig, type SceneConfig, SceneConfigSchema } from "@polinetwork/glass"
-// import type { MeshTransmissionMaterialProps } from "@react-three/drei"
-import { useControls } from "leva"
+import {
+  type GlassPresetName,
+  glassThemeTint,
+  glassPresets,
+  glassTints,
+  type SceneConfig,
+  SceneConfigSchema,
+} from "@polinetwork/glass"
 import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { SchemaForm } from "./schema-form"
 import { getDefaultValues } from "./utils"
@@ -14,158 +20,44 @@ export function DemoOptions(props: {
   onChange?: (options: SceneConfig) => void
   onDarkModeChange?: (isDark: boolean) => void
   isDarkMode?: boolean
+  onPresetChange?: (preset: GlassPresetName) => void
+  /** The color of the tinted preset */
+  tintColor?: string
+  onTintColorChange?: (color: string) => void
 }) {
-  const material: GlassConfig = useControls({
-    dithering: true,
-    color: "#ffffff",
-    emissive: "#000000",
-    esmissiveIntensity: {
-      min: 0,
-      max: 10,
-      value: 0,
-      step: 0.01,
-    },
-    anisotropy: {
-      min: 0,
-      max: 1,
-      value: 0,
-      step: 0.01,
-    },
-    anisotropyRotation: {
-      min: 0,
-      max: Math.PI,
-      value: 0,
-      step: 0.01,
-    },
-    attenuationColor: "#fefefe",
-    attenuationDistance: {
-      min: 0,
-      max: 100,
-      value: 100,
-      step: 0.01,
-    },
-    clearcoat: {
-      min: 0,
-      max: 1,
-      value: 1,
-      step: 0.01,
-    },
-    clearcoatRoughness: {
-      min: 0,
-      max: 1,
-      value: 0.8,
-      step: 0.01,
-    },
-    clearcoatColor: "#ffffff",
-    dispersion: {
-      min: 0,
-      max: 1,
-      value: 0,
-      step: 0.01,
-    },
-    ior: {
-      min: 1,
-      max: 10,
-      value: 8,
-      step: 0.01,
-    },
-    iridescence: {
-      min: 0,
-      max: 1,
-      value: 0.5,
-      step: 0.01,
-    },
-    iridescenceIOR: {
-      min: 1,
-      max: 2.333,
-      value: 5,
-      step: 0.01,
-    },
-    iridescenceThicknessRange: {
-      value: [100, 400],
-    },
-    sheen: {
-      min: 0,
-      max: 1,
-      value: 0.5,
-      step: 0.01,
-    },
-    sheenColor: "#ffffff",
-    specularIntensity: {
-      min: 0,
-      max: 1,
-      value: 0,
-      step: 0.01,
-    },
-    specularColor: "#ffffff",
-    thickness: {
-      min: 0,
-      max: 200,
-      value: 100,
-      step: 0.01,
-    },
-    transmission: {
-      min: 0,
-      max: 1,
-      value: 0.95,
-      step: 0.01,
-    },
-
-    roughness: {
-      min: 0,
-      max: 1,
-      value: 0.1,
-      step: 0.01,
-    },
-    chromaticAberration: {
-      min: 0,
-      max: 1,
-      value: 0.6,
-      step: 0.01,
-    },
-    anisotropicBlur: {
-      min: 0,
-      max: 1,
-      value: 0.8,
-      step: 0.01,
-    },
-    transmissionSampler: false,
-    backside: false,
-    resolution: {
-      min: 16,
-      max: 1024,
-      value: 256,
-      step: 16,
-    },
-    backsideResolution: {
-      min: 16,
-      max: 1024,
-      value: 256,
-      step: 16,
-    },
-    samples: {
-      min: 1,
-      max: 64,
-      value: 16,
-      step: 1,
-    },
+  const [config, setConfig] = useState<SceneConfig>(() => {
+    const defaults = getDefaultValues(SceneConfigSchema)
+    return props.isDarkMode ? { ...defaults, tint: { ...defaults.tint, ...glassThemeTint.dark } } : defaults
   })
-  const defaultConfig = getDefaultValues(SceneConfigSchema)
-  const [scf, setConfig] = useState<SceneConfig>(defaultConfig)
+  const [preset, setPreset] = useState<GlassPresetName>("regular")
   const [isVisible, setIsVisible] = useState(true)
-  const config = { ...scf, material }
 
   useEffect(() => {
     props.onChange?.(config)
-  }, [scf, material])
+  }, [config])
+
+  // the regular glass is tinted less in the dark theme, as Apple's is
+  const regularTint = (dark: boolean) => (dark ? glassThemeTint.dark : glassThemeTint.light)
 
   const handleDarkModeToggle = () => {
     props.onDarkModeChange?.(!props.isDarkMode)
+    if (preset === "regular") setConfig((c) => ({ ...c, tint: { ...c.tint, ...regularTint(!props.isDarkMode) } }))
   }
 
-  const handleReset = () => {
-    setConfig(defaultConfig)
+  const handlePreset = (name: GlassPresetName) => {
+    const p = glassPresets[name]
+    setPreset(name)
+    props.onPresetChange?.(name)
+    setConfig((c) => ({
+      plane: { ...c.plane, ...p.plane },
+      shape: { ...c.shape, ...p.shape },
+      surface: { ...c.surface, ...p.surface },
+      tint: { ...c.tint, ...p.tint, ...(name === "regular" && regularTint(Boolean(props.isDarkMode))) },
+      edge: { ...c.edge, ...p.edge },
+    }))
   }
+
+  const handleReset = () => handlePreset("regular")
 
   return (
     <div glass-ignore="" className="fixed flex right-0 top-0 z-[1000] max-h-screen">
@@ -193,6 +85,53 @@ export function DemoOptions(props: {
               </Label>
               <Switch id="dark-mode" checked={props.isDarkMode} onCheckedChange={handleDarkModeToggle} />
             </div>
+
+            {/* Preset */}
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="preset">Preset</Label>
+              <Select value={preset} onValueChange={(v) => handlePreset(v as GlassPresetName)}>
+                <SelectTrigger id="preset" className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(glassPresets) as GlassPresetName[]).map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Color of the tinted preset */}
+            {preset === "tinted" && (
+              <div className="space-y-2">
+                <Label>Tint color</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {Object.entries(glassTints).map(([name, color]) => (
+                    <button
+                      key={name}
+                      type="button"
+                      title={name}
+                      aria-label={name}
+                      onClick={() => props.onTintColorChange?.(color)}
+                      className="size-6 rounded-full border-2 border-background ring-offset-1 ring-offset-background"
+                      style={{
+                        backgroundColor: color,
+                        boxShadow: props.tintColor === color ? `0 0 0 2px ${color}` : "0 0 0 1px rgba(0,0,0,0.2)",
+                      }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom tint color"
+                    value={props.tintColor}
+                    onChange={(e) => props.onTintColorChange?.(e.target.value)}
+                    className="size-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Schema-generated form */}
             <SchemaForm schema={SceneConfigSchema} value={config} onChange={setConfig} />
