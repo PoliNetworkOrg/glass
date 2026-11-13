@@ -327,9 +327,14 @@ processed. For each glass of layer > 0, `backdrop(glass, below, scrollX, scrollY
    canvas and shadow hidden, in a transparent SVG with `OVERLAY_MARGIN` (8px) of room for overflow. It is taken the
    first time it is needed and again when a `MutationObserver` or `ResizeObserver` says the element changed (its own
    `style` and canvas changes don't count: a press writes those every frame). Only one element picture is taken at a
-   time, and a `fresh` one is retaken after 400ms.
-4. **Key.** A string of region, scroll, snapshot id, and for each lower glass its draw version, key, center and overlay
-   version. If it matches the last backdrop, nothing is drawn: it is reused.
+   time, and a `fresh` one is retaken after 400ms. None is taken while the page scrolls faster than `CAPTURE_SPEED`
+   (0.5px/ms) or for `CALM` (100ms) after: each lays out and paints a copy of the element with all of the page's CSS on
+   the main thread, and a flick ran the header and tab bar into a new caption bar every 50ms or so, a megabyte a second
+   of garbage. Until then the lower glass shows without its overlay, while it moves too fast to read.
+4. **What it is drawn from.** Region, scroll, snapshot, and for each lower glass its entry, draw version, key, center
+   and overlay version, written over the values of the last frame in `entry.drawnFrom`, one at a time (`put`). If none
+   changed, nothing is drawn: it is reused. Otherwise `backdrop.version` takes a new number (unique across the
+   renderer), which is what the glass drawn on it compares.
 5. **Draw.** Into a per-glass backdrop target (which only grows):
    - **page pass**: the page, offset by scroll, over the region, encoded to sRGB;
    - **composite pass**: each lower glass's `output` texture, cut to its shape with `edge()` and a pixel of softness, and the
@@ -349,7 +354,12 @@ The renderer can't just hand each glass its own canvas: a canvas can't be shared
 canvases would bring the context cap back. So (`show()`):
 
 1. The glasses drawn this frame are laid out **side by side in rows** on the renderer's canvas (rows wrap at 2048px
-   or the widest glass). That canvas only ever grows, because resizing it is expensive.
+   or the widest glass). An OffscreenCanvas is sized to exactly that on every frame: its bitmap (step 3) takes its
+   buffer and it gets a new one as big as itself either way, so one grown once for every glass on the page (1819x352
+   on a phone, at load) was 2.5MB of bitmap on every frame of a scroll that only redraws the header and the tab bar,
+   against about 250KB sized to them. Safari counts every bitmap as memory to collect, and that size of it ran a full
+   collection, 40–60ms with nothing drawn, about every 220ms of a flick. A plain `<canvas>` (no OffscreenCanvas) is
+   copied from directly and only ever grows, since there resizing is what costs.
 2. Each glass's `output` is `blitFramebuffer`'d into its slot. GL counts rows from the bottom, hence the flip in the
    slot's y.
 3. The canvas is taken **as one bitmap** (`transferToImageBitmap()`) and each glass's own 2D canvas gets a `drawImage`
@@ -400,17 +410,29 @@ A glass pass is skipped when everything it was last drawn with is the same (`dra
 entry.generation === renderer.generation   (the GL context hasn't been restored since)
 entry.key        === state.key             (see below)
 entry.snapshot   === state.snapshot        (no new capture)
-entry.backdrop   === backdrop.key          ('' for layer 0)
+entry.backdrop   === backdrop.version      (0 for layer 0)
 and entry.output exists
 ```
 
-`state.key` (built in `Glass3D.frame`) is: drawn size, layout size, `bg` (page position of the glass), border radius,
-corner exponent, frost, saturate, lift, and the shape config. Because `bg` is in it, a glass that **stays on screen** while
-the page scrolls is redrawn every frame, and one that **scrolls with the page** is not (its `bg` doesn't change).
-That's the main reason a page of scrolling content with lots of glass costs nothing while it scrolls.
+`state.key` is a number (`nextKey()`) that `Glass3D.frame` takes anew whenever what the glass is drawn from changes:
+drawn size, layout size, center (so `bg`, the page position of the glass), snapshot, layer, border radius, corner
+exponent, frost, saturate, lift, and the shape config (by value: a new object with the same values is the same shape).
+While none of them changes, `frame()` hands back **the same state object**: it runs for every glass on every frame, and
+a new state with its key string and uniforms each time was garbage Safari collected in 30–60ms pauses, about every
+1.5s with the page still and about every 250ms while it scrolled, which is the glass stopping behind the page. The
+lead isn't part of it (it is the measured frame, a little different on every one, and doesn't change what is drawn).
 
-`entry.version` increments on each draw; a higher layer's backdrop key includes the versions of the glass below, which
-is how it knows to redraw when one of them did.
+Because the center is in it, a glass that **stays on screen** while the page scrolls is redrawn every frame, and one
+that **scrolls with the page** is not (its center on the page doesn't change). That's the main reason a page of
+scrolling content with lots of glass costs nothing while it scrolls.
+
+`entry.version` increments on each draw; a higher layer's backdrop compares the versions of the glass below, which is
+how it knows to redraw when one of them did.
+
+The frame loop allocates as little as it can for the same reason: `draw()` keeps its lists and one `Glass` per entry
+from frame to frame, the predictor keeps plain number arrays and hands back the same pair, and the frame loop in
+`frames.ts` keeps its list of commits. In headless Chrome on the showcase this took allocation from 675 to 207KB/s at
+rest and from 3.3 to 1.5MB/s while scrolling.
 
 Off screen glass (`useInView`, 200px margin) isn't in the renderer at all.
 
@@ -452,7 +474,9 @@ This is where most bugs come from. Four spaces are in play:
   `snapshot.ts` makes one to read `MAX_TEXTURE_SIZE`, and loses it right away.)
 - **Never read a texture that is also the framebuffer target.** Backdrop, `across` and `down` are separate targets for this reason.
 - **sRGB discipline** (see Color handling). A texture is either decoded by the GPU or by hand, never both.
-- **Cache keys must include everything that changes the pixels.** If you add a uniform that varies per glass, put it in
-  `state.key`, or the glass won't redraw when it changes.
+- **Cache keys must include everything that changes the pixels.** If you add a uniform that varies per glass, add
+  what it comes from to what `Glass3D.frame` compares (`made`), or the glass won't redraw when it changes.
+- **Don't allocate in the frame loop.** No new arrays, objects, closures or strings per glass per frame where one kept
+  from the last frame will do: Safari collects that garbage in 30–60ms pauses, and the glass stops behind the page.
 - **Add GPU resources to `free()` and to the context-restored reset** or they leak / dangle after a restore.
 - **A bump in the benchmark needs a `VERSION` bump** in `capability.ts`.

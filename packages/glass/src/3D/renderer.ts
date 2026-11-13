@@ -51,8 +51,12 @@ export type GlassState = {
   lift: number
   /** The profile, with the page as its backdrop */
   uniforms: GlassUniforms
-  /** Everything about what it draws apart from what is behind it: when it is the same, so is what it draws */
-  key: string
+  /**
+   * Everything about what it draws apart from what is behind it, as a number that is new whenever any of it changes
+   * ({@link nextKey}): when it is the same, so is what it draws. A number and not a string of what it is made of, which
+   * was garbage on every frame of a scroll for the glass that stays in place on the screen.
+   */
+  key: number
 }
 
 export type GlassTarget = {
@@ -68,6 +72,19 @@ const ROW_WIDTH = 2048
 const OVERLAY_MARGIN = 8
 /** How much more than its frost reads is drawn behind a higher layer, around its glass, in px */
 const BACKDROP_MARGIN = 4
+/**
+ * The pictures of what a glass has over it wait while the page scrolls faster than this, in px per ms, and for `CALM`
+ * ms after: each one lays out and paints a copy of the element with all of the page's CSS on the main thread, and
+ * during a flick the header and tab bar ran into a new caption bar every 50ms or so, which made frames late and a
+ * megabyte a second of garbage. Until its picture is taken, a glass shows under a higher layer without what it has
+ * over its glass, for as long as it moves too fast to read.
+ */
+const CAPTURE_SPEED = 0.5
+const CALM = 100
+
+/** A new number for a new state of a glass: its key, see {@link GlassState} */
+let keys = 0
+export const nextKey = () => ++keys
 
 type Program = {
   program: WebGLProgram
@@ -150,12 +167,15 @@ type Overlay = {
 }
 
 type Entry = {
+  target: GlassTarget
+  /** The glass as the frame hands it around, one object kept from frame to frame */
+  glass: Glass | null
   /** What the glass drew last, kept for the layers above it */
   output: Target | null
-  /** What it was drawn with: its key, its picture of the page and its backdrop */
-  key: string
+  /** What it was drawn with: its key, its picture of the page and the version of its backdrop (0 for none) */
+  key: number
   snapshot: Snapshot | null
-  backdrop: string
+  backdrop: number
   /** The time the context had come back, when it was drawn */
   generation: number
   /** Counts its drawings, so that a backdrop with it in it knows to be drawn again */
@@ -163,6 +183,9 @@ type Entry = {
   overlay: Overlay | null
   /** What is behind it, for the glass of a higher layer */
   behind: Backdrop | null
+  /** The glass below that is in its backdrop, and what the backdrop was last drawn from, kept from frame to frame */
+  under: Glass[]
+  drawnFrom: unknown[]
   /** What is behind it blurred by its frost, and the blur across it, which the blur down it reads */
   frosted: Target | null
   across: Target | null
@@ -170,11 +193,24 @@ type Entry = {
 
 type Glass = { target: GlassTarget; entry: Entry; state: GlassState }
 
-/** What is behind a higher layer: drawn for the region of the screen the layer covers */
-type Backdrop = Target & { key: string; region: [number, number, number, number] }
+/**
+ * What is behind a higher layer: drawn for the region of the screen the layer covers. Its version, unique across the
+ * renderer, changes whenever it is drawn again, which is how the glass on it knows to be drawn again.
+ */
+type Backdrop = Target & { version: number; region: [number, number, number, number] }
 
 const followsInDocument = (a: Glass, b: Glass) =>
   a.state.element.compareDocumentPosition(b.state.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+/** From the bottom up: by layer, then in the order of the document */
+const bottomUp = (a: Glass, b: Glass) => a.state.layer - b.state.layer || followsInDocument(a, b)
+const ascending = (a: number, b: number) => a - b
+
+/** Writes `value` at `i` of `list`, and says whether it was something else there */
+const put = (list: unknown[], i: number, value: unknown) => {
+  if (list[i] === value) return false
+  list[i] = value
+  return true
+}
 
 class GlassRenderer {
   private readonly canvas: OffscreenCanvas | HTMLCanvasElement
@@ -189,10 +225,21 @@ class GlassRenderer {
   private readonly blurs = new Map<Snapshot, Map<number, Target>>()
   private readonly entries = new Map<GlassTarget, Entry>()
   private readonly contexts = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D | null>()
-  private readonly snapshotIds = new WeakMap<Snapshot, number>()
-  private nextSnapshotId = 0
   /** Where the page is scrolled, ahead by the lead as the glass is */
   private readonly scroll = createPredictor()
+  /**
+   * The lists a frame is drawn with, emptied and filled again on every one: this runs on every frame, and new lists
+   * each time were garbage that Safari collected in pauses of 30 to 60ms
+   */
+  private readonly frameGlasses: Glass[] = []
+  private readonly frameLayers: number[] = []
+  private readonly frameBelow: Glass[] = []
+  private readonly frameDrawn: Glass[] = []
+  /** Counts the drawings of the backdrops, for their versions */
+  private backdropVersion = 0
+  /** The time of this frame, and the last one the page scrolled faster than {@link CAPTURE_SPEED} */
+  private now = 0
+  private fastAt = Number.NEGATIVE_INFINITY
   private stop: (() => void) | null = null
   private lost = false
   /** One picture of an element is taken at a time */
@@ -257,14 +304,18 @@ class GlassRenderer {
   /** Draws `target` on every frame, until the function it returns is called */
   add(target: GlassTarget) {
     this.entries.set(target, {
+      target,
+      glass: null,
       output: null,
-      key: "",
+      key: 0,
       snapshot: null,
-      backdrop: "",
+      backdrop: 0,
       generation: -1,
       version: 0,
       overlay: null,
       behind: null,
+      under: [],
+      drawnFrom: [],
       frosted: null,
       across: null,
     })
@@ -398,15 +449,6 @@ class GlassRenderer {
     return [a, d]
   }
 
-  private snapshotId(snapshot: Snapshot) {
-    let id = this.snapshotIds.get(snapshot)
-    if (id === undefined) {
-      id = this.nextSnapshotId++
-      this.snapshotIds.set(snapshot, id)
-    }
-    return id
-  }
-
   /** A texture of at least `width` x `height` to draw into, `current` if it is big enough. It only ever grows. */
   private target(
     current: Target | null,
@@ -479,7 +521,8 @@ class GlassRenderer {
       overlay = created
       entry.overlay = created
     }
-    if (overlay.stale && !overlay.capturing && !this.capturing) {
+    const calm = this.now - this.fastAt >= CALM
+    if (overlay.stale && !overlay.capturing && !this.capturing && calm) {
       const o = overlay
       o.capturing = true
       o.stale = false
@@ -513,62 +556,73 @@ class GlassRenderer {
    * own: a fixed header and a fixed tab bar together would cover the whole screen, drawn again on every frame of a
    * scroll, and on their own they cover two strips of it.
    */
-  private backdrop(glass: Glass, below: Glass[], scrollX: number, scrollY: number) {
-    const members = [glass]
-    // the region: where the glass of the layer is on the screen, and as far around it as the blur of its frost reads
-    let x0 = Number.POSITIVE_INFINITY
-    let y0 = Number.POSITIVE_INFINITY
-    let x1 = Number.NEGATIVE_INFINITY
-    let y1 = Number.NEGATIVE_INFINITY
-    for (const { state } of members) {
-      const reach = (state.uniforms.frost > 0 ? blurReach(frostSigma(state.uniforms.frost)) : 0) + BACKDROP_MARGIN
-      const cx = state.center[0] - scrollX
-      const cy = state.center[1] - scrollY
-      x0 = Math.min(x0, cx - state.drawn[0] / 2 - reach)
-      y0 = Math.min(y0, cy - state.drawn[1] / 2 - reach)
-      x1 = Math.max(x1, cx + state.drawn[0] / 2 + reach)
-      y1 = Math.max(y1, cy + state.drawn[1] / 2 + reach)
-    }
-    const region: [number, number, number, number] = [
-      Math.floor(x0),
-      Math.floor(y0),
-      Math.ceil(x1) - Math.floor(x0),
-      Math.ceil(y1) - Math.floor(y0),
-    ]
-    const [rx, ry, rw, rh] = region
+  private backdrop(glass: Glass, below: Glass[], scrollX: number, scrollY: number): Backdrop | null {
+    const { entry, state } = glass
+    // the region: where the glass is on the screen, and as far around it as the blur of its frost reads
+    const reach = (state.uniforms.frost > 0 ? blurReach(frostSigma(state.uniforms.frost)) : 0) + BACKDROP_MARGIN
+    const gx = state.center[0] - scrollX
+    const gy = state.center[1] - scrollY
+    const rx = Math.floor(gx - state.drawn[0] / 2 - reach)
+    const ry = Math.floor(gy - state.drawn[1] / 2 - reach)
+    const rw = Math.ceil(gx + state.drawn[0] / 2 + reach) - rx
+    const rh = Math.ceil(gy + state.drawn[1] / 2 + reach) - ry
 
-    // the glass below that is in it, from the bottom up: by layer, then in the order of the document
-    const under = below
-      .filter(({ state }) => {
-        const cx = state.center[0] - scrollX
-        const cy = state.center[1] - scrollY
-        const hw = (state.drawn[0] * (state.width + OVERLAY_MARGIN * 2)) / state.width / 2
-        const hh = (state.drawn[1] * (state.height + OVERLAY_MARGIN * 2)) / state.height / 2
-        return cx + hw > rx && cx - hw < rx + rw && cy + hh > ry && cy - hh < ry + rh
-      })
-      .sort((a, b) => a.state.layer - b.state.layer || followsInDocument(a, b))
+    // the glass below that is in it, from the bottom up
+    const under = entry.under
+    under.length = 0
+    for (const other of below) {
+      const o = other.state
+      const cx = o.center[0] - scrollX
+      const cy = o.center[1] - scrollY
+      const hw = (o.drawn[0] * (o.width + OVERLAY_MARGIN * 2)) / o.width / 2
+      const hh = (o.drawn[1] * (o.height + OVERLAY_MARGIN * 2)) / o.height / 2
+      if (cx + hw > rx && cx - hw < rx + rw && cy + hh > ry && cy - hh < ry + rh) under.push(other)
+    }
     if (under.length === 0) return null
+    if (under.length > 1) under.sort(bottomUp)
 
-    const snapshot = members[0].state.snapshot
-    const overlays = under.map(({ entry, state }) => this.overlay(entry, state))
-    const key = [
-      region.join(" "),
-      scrollX,
-      scrollY,
-      this.snapshotId(snapshot),
-      ...under.map(({ entry, state }, i) => `${entry.version} ${state.key} ${state.center} ${overlays[i].version}`),
-    ].join("|")
-
-    const current = glass.entry.behind
-    const backdrop: Backdrop = {
-      ...this.target(current ?? null, rw, rh, false),
-      key: current?.key ?? "",
-      region,
+    // What it is drawn from, compared with what it was last drawn from one value at a time, in place: no key to build
+    // and throw away on every frame
+    const snapshot = state.snapshot
+    const from = entry.drawnFrom
+    let n = 0
+    let changed = put(from, n++, rx)
+    changed = put(from, n++, ry) || changed
+    changed = put(from, n++, rw) || changed
+    changed = put(from, n++, rh) || changed
+    changed = put(from, n++, scrollX) || changed
+    changed = put(from, n++, scrollY) || changed
+    changed = put(from, n++, snapshot) || changed
+    for (const { entry: e, state: s } of under) {
+      const overlay = this.overlay(e, s)
+      changed = put(from, n++, e) || changed
+      changed = put(from, n++, e.version) || changed
+      changed = put(from, n++, s.key) || changed
+      changed = put(from, n++, s.center[0]) || changed
+      changed = put(from, n++, s.center[1]) || changed
+      changed = put(from, n++, overlay.version) || changed
     }
-    if (current && backdrop.fbo !== current.fbo) backdrop.key = ""
-    glass.entry.behind = backdrop
-    if (backdrop.key === key) return backdrop
-    backdrop.key = key
+    if (from.length !== n) {
+      from.length = n
+      changed = true
+    }
+
+    const current = entry.behind
+    const target = this.target(current, rw, rh, false)
+    let backdrop: Backdrop
+    if (current && target === current) backdrop = current
+    else {
+      // a new texture, bigger, which has nothing drawn in it yet
+      backdrop = { ...target, version: 0, region: [rx, ry, rw, rh] }
+      entry.behind = backdrop
+      changed = true
+    }
+    if (!changed) return backdrop
+    backdrop.version = ++this.backdropVersion
+    backdrop.region[0] = rx
+    backdrop.region[1] = ry
+    backdrop.region[2] = rw
+    backdrop.region[3] = rh
 
     const gl = this.gl
     gl.bindFramebuffer(gl.FRAMEBUFFER, backdrop.fbo)
@@ -595,9 +649,9 @@ class GlassRenderer {
     gl.uniform4f(c.uniforms.uRegion, rx, ry, rw, rh)
     gl.uniform1i(c.uniforms.uGlass, 0)
     gl.uniform1i(c.uniforms.uOverlay, 1)
-    under.forEach(({ entry, state }, i) => {
-      if (!entry.output) return
-      const overlay = overlays[i]
+    for (const { entry, state } of under) {
+      if (!entry.output) continue
+      const overlay = this.overlay(entry, state)
       const hasOverlay = overlay.canvas !== null
       if (hasOverlay) this.uploadOverlay(overlay)
       const scale: [number, number] = [state.drawn[0] / state.width, state.drawn[1] / state.height]
@@ -619,7 +673,7 @@ class GlassRenderer {
       gl.uniform1f(c.uniforms.uRadius, state.uniforms.radius)
       gl.uniform1f(c.uniforms.uExp, state.uniforms.exponent)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-    })
+    }
     gl.disable(gl.BLEND)
     gl.activeTexture(gl.TEXTURE0)
     return backdrop
@@ -704,40 +758,51 @@ class GlassRenderer {
 
     entry.key = state.key
     entry.snapshot = state.snapshot
-    entry.backdrop = backdrop?.key ?? ""
+    entry.backdrop = backdrop ? backdrop.version : 0
     entry.generation = this.generation
     entry.version++
   }
 
   private draw(time: number) {
     if (this.lost || this.gl.isContextLost()) return
-    const glasses: Glass[] = []
-    for (const [target, entry] of this.entries) {
-      const state = target.frame(time)
-      if (state && state.width > 0 && state.height > 0) glasses.push({ target, entry, state })
+    this.now = time
+    if (frameScroll.speed > CAPTURE_SPEED) this.fastAt = time
+    const glasses = this.frameGlasses
+    glasses.length = 0
+    for (const entry of this.entries.values()) {
+      const state = entry.target.frame(time)
+      if (!state || state.width <= 0 || state.height <= 0) continue
+      if (entry.glass) entry.glass.state = state
+      else entry.glass = { target: entry.target, entry, state }
+      glasses.push(entry.glass)
     }
     if (glasses.length === 0) return
     const [scrollX, scrollY] = this.scroll(time, frameScroll.x, frameScroll.y, glasses[0].state.lead)
 
     // from the bottom layer up: each is drawn before the ones above it, which may be drawn over it
-    const drawn: Glass[] = []
-    const layers = [...new Set(glasses.map(({ state }) => state.layer))].sort((a, b) => a - b)
-    const below: Glass[] = []
+    const layers = this.frameLayers
+    layers.length = 0
+    for (const { state } of glasses) if (!layers.includes(state.layer)) layers.push(state.layer)
+    layers.sort(ascending)
+    const drawn = this.frameDrawn
+    drawn.length = 0
+    const below = this.frameBelow
+    below.length = 0
     for (const layer of layers) {
-      const members = glasses.filter(({ state }) => state.layer === layer)
-      for (const glass of members) {
+      for (const glass of glasses) {
+        if (glass.state.layer !== layer) continue
         const { entry, state } = glass
         const backdrop = below.length > 0 ? this.backdrop(glass, below, scrollX, scrollY) : null
         const same =
           entry.generation === this.generation &&
           entry.key === state.key &&
           entry.snapshot === state.snapshot &&
-          entry.backdrop === (backdrop?.key ?? "")
+          entry.backdrop === (backdrop ? backdrop.version : 0)
         if (same && entry.output) continue
         this.drawGlass(glass, backdrop, scrollX, scrollY)
         drawn.push(glass)
       }
-      below.push(...members)
+      for (const glass of glasses) if (glass.state.layer === layer) below.push(glass)
     }
     if (drawn.length > 0) this.show(drawn)
   }
@@ -764,11 +829,16 @@ class GlassRenderer {
     }
     const height = y + rowHeight
 
-    // the canvas only ever grows: resizing it is what costs, and it would happen on every frame
+    // Taken as a bitmap (an OffscreenCanvas), the canvas is exactly as big as what is drawn on this frame: the bitmap
+    // takes its buffer, and it gets a new one as big as itself either way, so a canvas grown once for every glass on the
+    // page (1819x352 on a phone, at load) made 2.5MB of bitmap on every frame of a scroll that redraws a header and a tab
+    // bar. Safari counts that as memory to collect, and ran a full collection, 40 to 60ms with nothing drawn, about every
+    // 220ms of a flick. Copied from directly (a <canvas>), it only ever grows: there resizing is what costs.
     const canvas = this.canvas
-    if (canvas.width < width || canvas.height < height) {
-      canvas.width = Math.max(canvas.width, width)
-      canvas.height = Math.max(canvas.height, height)
+    const bitmap = "transferToImageBitmap" in canvas
+    if (bitmap ? canvas.width !== width || canvas.height !== height : canvas.width < width || canvas.height < height) {
+      canvas.width = bitmap ? width : Math.max(canvas.width, width)
+      canvas.height = bitmap ? height : Math.max(canvas.height, height)
     }
 
     const gl = this.gl

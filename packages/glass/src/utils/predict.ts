@@ -42,12 +42,15 @@ const ramp = (speed: number) => {
 }
 
 /**
- * The speed at the last of `samples` (time, position), from the parabola fitted to them by least squares, or from the
- * line where there are too few for a parabola to mean anything
+ * The speed at the last of the samples (`ts` the times, `ps` the positions), from the parabola fitted to them by least
+ * squares, or from the line where there are too few for a parabola to mean anything. Plain arrays of numbers and an
+ * indexed loop: it runs for every glass on every frame, and tuples and iterators there were garbage to collect, which
+ * Safari does in pauses of 30 to 60ms
  */
-function fit(samples: [number, number][]): number {
-  const n = samples.length
-  const [t0, p0] = samples[n - 1]
+function fit(ts: number[], ps: number[]): number {
+  const n = ts.length
+  const t0 = ts[n - 1]
+  const p0 = ps[n - 1]
   // the sums of the normal equations, in time from the last sample so the numbers stay small
   let s1 = 0
   let s2 = 0
@@ -56,9 +59,9 @@ function fit(samples: [number, number][]): number {
   let sp = 0
   let s1p = 0
   let s2p = 0
-  for (const [t, p] of samples) {
-    const u = t - t0
-    const q = p - p0
+  for (let i = 0; i < n; i++) {
+    const u = ts[i] - t0
+    const q = ps[i] - p0
     s1 += u
     s2 += u * u
     s3 += u * u * u
@@ -81,12 +84,22 @@ function fit(samples: [number, number][]): number {
 /**
  * Makes a predictor for one moving point. Called once a frame with where the point is, it returns where it will be
  * `lead` ms later, at the speed it has had over the last frames.
+ *
+ * The pair it returns is the same array every time, overwritten by the next call: read it at once.
  */
 export function createPredictor() {
-  const xs: [number, number][] = []
-  const ys: [number, number][] = []
+  // the samples in the window, as three arrays of numbers, which allocate nothing once they have grown to its size
+  const ts: number[] = []
+  const xs: number[] = []
+  const ys: number[] = []
   /** Where it was last frame, and when it last moved */
   const last = { t: 0, x: 0, y: 0, moved: 0 }
+  const out: [number, number] = [0, 0]
+  const result = (x: number, y: number) => {
+    out[0] = x
+    out[1] = y
+    return out
+  }
 
   return (time: number, x: number, y: number, lead: number): [number, number] => {
     const moving = last.t === 0 || x !== last.x || y !== last.y
@@ -94,21 +107,32 @@ export function createPredictor() {
     // A jump starts over. So does a start after a stop: only the last still frame is kept, so the speed isn't read off a
     // window that is mostly standing still, which had the glass trail a flick by a few frames' worth as it started.
     if (last.t > 0 && Math.hypot(x - last.x, y - last.y) / dt > MAX_SPEED) {
+      ts.length = 0
       xs.length = 0
       ys.length = 0
-    } else if (moving && last.t > 0 && last.t - last.moved >= STILL) {
-      xs.splice(0, xs.length - 1)
-      ys.splice(0, ys.length - 1)
+    } else if (moving && last.t > 0 && last.t - last.moved >= STILL && ts.length > 1) {
+      const keep = ts.length - 1
+      ts.copyWithin(0, keep)
+      xs.copyWithin(0, keep)
+      ys.copyWithin(0, keep)
+      ts.length = xs.length = ys.length = 1
     }
     if (moving) last.moved = time
     last.t = time
     last.x = x
     last.y = y
-    xs.push([time, x])
-    ys.push([time, y])
-    while (xs.length > 0 && xs[0][0] < time - WINDOW) {
-      xs.shift()
-      ys.shift()
+    ts.push(time)
+    xs.push(x)
+    ys.push(y)
+    let old = 0
+    while (old < ts.length && ts[old] < time - WINDOW) old++
+    if (old > 0) {
+      ts.copyWithin(0, old)
+      xs.copyWithin(0, old)
+      ys.copyWithin(0, old)
+      ts.length -= old
+      xs.length -= old
+      ys.length -= old
     }
 
     // Without a lead it is where the browser says, as it is: a frame behind, by the same amount for as long as the speed
@@ -116,9 +140,9 @@ export function createPredictor() {
     // the page as a scroll started and ran past it as it stopped (the line bends late), a swing of up to 40px in a few
     // frames that read as a bounce on every turn of a mouse wheel.
     const since = time - last.moved
-    if (lead <= 0 || since >= STILL || xs.length < 2) return [x, y]
-    const vx = fit(xs)
-    const vy = fit(ys)
+    if (lead <= 0 || since >= STILL || ts.length < 2) return result(x, y)
+    const vx = fit(ts, xs)
+    const vy = fit(ts, ys)
     const speed = Math.hypot(vx, vy)
     const k = lead * ramp(speed)
     // A frame without news is a late report or a stop. Slow, there is no telling them apart yet: the first is let be,
@@ -129,6 +153,6 @@ export function createPredictor() {
       since > 0 && speed * since > MISSED ? 0 : since < QUIET ? 1 : Math.max(0, 1 - (since - QUIET) / (STILL - QUIET))
     // Ahead at that speed. Not along the curve: it keeps the acceleration of the finger past the moment it lets go, and
     // overshot there by twice as much
-    return [x + vx * k * fade, y + vy * k * fade]
+    return result(x + vx * k * fade, y + vy * k * fade)
   }
 }

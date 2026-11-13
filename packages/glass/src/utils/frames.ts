@@ -12,7 +12,12 @@ let frame = 0
  * Where the page is scrolled, read once at the start of each frame for every glass. It is read from the window and not
  * from scroll events: where the page is pulled past its end (an overscroll) it can change without one.
  */
-export const frameScroll = { x: 0, y: 0 }
+export const frameScroll = {
+  x: 0,
+  y: 0,
+  /** How fast it moved over the last frame, in px per ms */
+  speed: 0,
+}
 
 /** How long a frame of the display is, in ms, smoothed over the last frames */
 let frameTime = 1000 / 60
@@ -35,20 +40,28 @@ const onWheel = () => {
  * which holds still, shows less. Before any input, a device whose pointer is a finger counts as touch.
  */
 export function autoLead() {
-  const touch = input === null ? matchMedia("(pointer: coarse)").matches : input === "touch"
+  // asked once: it runs for every glass on every frame, and each matchMedia() is a new object to collect
+  coarse ??= matchMedia("(pointer: coarse)").matches
+  const touch = input === null ? coarse : input === "touch"
   return touch ? frameTime : 0
 }
+let coarse: boolean | undefined
+/** What the watchers have to write on this frame, one list kept from frame to frame */
+const commits: (() => void)[] = []
 
 function tick(time: number) {
   frame = requestAnimationFrame(tick)
   // a frame longer than this is a dropped frame or a pause, not the length of one
   const dt = time - lastTime
   if (lastTime > 0 && dt > 4 && dt < 40) frameTime += (dt - frameTime) * 0.1
+  const x = window.scrollX
+  const y = window.scrollY
+  frameScroll.speed = lastTime > 0 && dt > 0 ? Math.hypot(x - frameScroll.x, y - frameScroll.y) / dt : 0
   lastTime = time
-  frameScroll.x = window.scrollX
-  frameScroll.y = window.scrollY
+  frameScroll.x = x
+  frameScroll.y = y
   // everything is read before anything is written, so a glass that redraws doesn't force a layout for the next one
-  const commits: (() => void)[] = []
+  commits.length = 0
   for (const read of watchers) {
     const commit = read()
     if (commit) commits.push(commit)
