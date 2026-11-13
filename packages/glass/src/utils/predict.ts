@@ -6,10 +6,14 @@
 // there, ahead by about the time it is late.
 //
 // What the browser says is rough: whole pixels, and at slow speeds frames with no news at all, then two frames' worth.
-// The speed is a line fitted to the last tenth of a second of it, and the point is where that line is now, which
-// smooths the roughness out instead of passing it on. Ahead is only worth it where the lag shows: a slow scroll, the
-// one to look at the glass closely, is drawn where the line is, and the lead comes in with the speed. Simulated against
-// the frame to frame differences this replaces, it shakes from half to a quarter as much at every speed.
+// The speed is a line fitted to the last tenth of a second of it, and the lead is added to where the browser says the
+// point is. Ahead is only worth it where the lag shows: a slow scroll, the one to look at the glass closely, is drawn
+// where the browser says, and the lead comes in with the speed.
+//
+// It is off by default (a lead of 0): a speed always reads late as a scroll starts and stops, so the glass trails, then
+// overshoots, and that swing shows far more than a lag that holds still. Measured in Chrome at 120Hz during a 2000px/s
+// scroll that stops dead: a steady 15px behind with no lead, against 0px while moving with 8ms of lead but 29px behind
+// as it starts and 13px past as it stops.
 
 /** An instantaneous speed past this, in px per ms, is a jump (an anchor, a scrollTo) and not a scroll, and isn't followed */
 const MAX_SPEED = 12
@@ -77,14 +81,18 @@ export function createPredictor() {
       ys.shift()
     }
 
+    // Without a lead it is where the browser says, as it is: a frame behind, by the same amount for as long as the speed
+    // holds, which the eye doesn't see. The line is only for the speed. Drawn where the line is, the glass trailed the
+    // page as a scroll started and ran past it as it stopped (the line bends late), a swing of up to 40px in a few
+    // frames that read as a bounce on every turn of a mouse wheel.
     const since = time - last.moved
-    if (since >= STILL || xs.length < 3) return [x, y]
-    const [fx, vx] = fit(xs, time)
-    const [fy, vy] = fit(ys, time)
+    if (lead <= 0 || since >= STILL || xs.length < 3) return [x, y]
+    const [, vx] = fit(xs, time)
+    const [, vy] = fit(ys, time)
     const k = lead * ramp(Math.hypot(vx, vy))
     // A frame without news is a late report or a stop, which there is no telling apart yet: the first is let be, and
     // from the second what is ahead of where it was fades out, so a scroll that stops dead doesn't overshoot for long
     const fade = since < QUIET ? 1 : Math.max(0, 1 - (since - QUIET) / (STILL - QUIET))
-    return [x + (fx + vx * k - x) * fade, y + (fy + vy * k - y) * fade]
+    return [x + vx * k * fade, y + vy * k * fade]
   }
 }

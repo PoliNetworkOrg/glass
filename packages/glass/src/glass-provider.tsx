@@ -12,9 +12,10 @@ export type GlassProviderProps = {
   enabled?: boolean
   /**
    * How far ahead, in ms, the 3D glass draws the page while the page moves under it. The browser tells the page that
-   * it scrolled a frame or more after it did, so the glass draws the page behind where it is: it makes up for that by
-   * drawing it where it is going, at the speed it is moving. 0 draws it where it was. Default: 16, which is the frame
-   * Chrome is late by (measured: 41px behind during a 2500px/s scroll without it, about 1px with it)
+   * it scrolled a frame after it did, so the glass draws the page a frame behind where it is: a lead draws it where it
+   * is going, at the speed it is moving. Default: 0, where the browser says. The speed reads late as a scroll starts
+   * and stops, so a lead trails, then overshoots the page there, which shows more than a lag that holds still: a frame
+   * of the display (8ms at 120Hz, 16ms at 60Hz) is right while moving, more overshoots all the time
    */
   scrollLead?: number
 }
@@ -35,7 +36,7 @@ export function GlassProvider(props: GlassProviderProps) {
     return () => setWanted((n) => n - 1)
   }, [])
   const snapshot = usePageSnapshot(props.deps, props.blur, enabled && wanted > 0)
-  const scrollLead = props.scrollLead ?? 16
+  const scrollLead = props.scrollLead ?? 0
   const value = useMemo(() => ({ snapshot, enabled, want, scrollLead }), [snapshot, enabled, want, scrollLead])
   return <GlassContext.Provider value={value}>{props.children}</GlassContext.Provider>
 }

@@ -361,11 +361,14 @@ Only the glasses that were drawn *this frame* go through `show()`; the others ke
 
 ## Scroll prediction
 
-Chrome scrolls off the page's thread and tells the page about it a frame or more later. The page under a glass that
-stays on screen is therefore drawn where it *was*. `utils/predict.ts` makes up for that:
+Browsers scroll off the page's thread and tell the page about it a frame later. The page under a glass that stays on
+screen is therefore drawn where it *was*, a frame behind. By default (`scrollLead` 0) that is left as it is: the glass
+uses the scroll position as the browser reports it, and the lag holds still while the speed does, which the eye
+barely sees. `utils/predict.ts` can draw it ahead instead:
 
-- keep the last 100ms of `(time, position)`; fit a **line** (least squares), and use where the line is *now* (smooths
-  the browser's whole-pixel, sometimes-no-news reports instead of passing them on);
+- keep the last 100ms of `(time, position)` and fit a **line** (least squares) for the **speed**; the lead is added to
+  the position as the browser reports it, not to where the line is (the line bends late, so drawn where it is, the
+  glass trailed the page by up to 40px as a scroll started and ran past it as it stopped, even with no lead);
 - the lead is `scrollLead * ramp(speed)`: nothing under 0.25px/ms, full at 0.8px/ms, smoothstep in between, so a slow
   scroll (the one you inspect the glass in) is drawn exactly and the lead comes in with speed;
 - a jump over 12px/ms (`scrollTo`, anchor) resets the window and isn't followed;
@@ -376,7 +379,9 @@ There are two predictors with different meanings. In `renderer.draw()` one predi
 which work in screen space). In `Glass3D.frame()` each glass has its own that predicts its **page position**
 (`scroll + rect`): for a glass that stays in place on screen, that moves with the scroll, and for a glass that scrolls
 with the page it doesn't move at all, so no prediction is applied, which is right because the browser moves it itself.
-In Chrome a 2500px/s scroll goes from 41px behind to within a few px.
+Measured in Chrome at 120Hz during a 2000px/s scroll that stops dead: no lead holds a steady 15px (a frame) behind;
+8ms of lead is within a px while moving, but trails by up to 29px as it starts and overshoots by 13px as it stops,
+which is why it is off by default. A lead is in ms but the lag is a frame, so it is only right for one refresh rate.
 
 ## When a glass is redrawn
 

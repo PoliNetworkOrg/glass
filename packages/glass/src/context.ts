@@ -19,7 +19,7 @@ export const GlassContext = createContext<GlassContextType>({
   snapshot: null,
   enabled: true,
   want: () => () => {},
-  scrollLead: 16,
+  scrollLead: 0,
 })
 
 export function useGlass() {
