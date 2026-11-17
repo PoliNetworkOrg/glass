@@ -511,7 +511,7 @@ class GlassRenderer {
       })
       mutations.observe(el, { subtree: true, childList: true, attributes: true, characterData: true })
       // it reports the size it starts with too, which the picture about to be taken already has
-      let size = ""
+      let size: string = ""
       const resizes = new ResizeObserver(([entry]) => {
         const next = `${entry.contentRect.width}x${entry.contentRect.height}`
         if (size && next !== size) created.stale = true
@@ -711,7 +711,7 @@ class GlassRenderer {
     const g = state.uniforms
     // what it bends, frosted: the page blurred once for all the glass, or what is behind it, blurred for it alone
     let map: WebGLTexture
-    let encoded = false
+    let encoded: boolean = false
     if (!backdrop) map = this.frosted(state.snapshot, g.frost)
     else if (g.frost > 0) {
       ;[entry.across, entry.frosted] = this.blurInto(

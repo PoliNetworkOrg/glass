@@ -49,7 +49,7 @@ function readCache(): boolean | null {
 }
 
 let verdict: boolean | null = typeof window === "undefined" ? null : readCache()
-let started = false
+let started: boolean = false
 const listeners = new Set<() => void>()
 
 function setVerdict(capable: boolean) {

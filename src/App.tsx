@@ -61,7 +61,7 @@ function App() {
   // The box the glass sits in is resized by its corner. It doesn't clip, so the shadow and the stretch of the glass go
   // past its edge, which the browser's own `resize` can't do: it only works on a box that clips.
   const [box, setBox] = useState({ width: 500, height: 500 })
-  const resizeBox = (e: React.PointerEvent<HTMLDivElement>) => {
+  const resizeBox = (e: React.PointerEvent<HTMLElement>) => {
     e.preventDefault()
     const start = { x: e.clientX, y: e.clientY, ...box }
     const handle = e.currentTarget
@@ -97,8 +97,8 @@ function App() {
             className="fixed inset-0 m-auto z-10 flex flex-col gap-4 border-2 p-4 text-shadow-xl"
             style={{ width: box.width, height: box.height }}
           >
-            <div
-              role="separator"
+            <button
+              type="button"
               aria-label="Resize"
               title="Resize"
               onPointerDown={resizeBox}

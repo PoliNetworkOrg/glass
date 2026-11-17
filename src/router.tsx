@@ -1,4 +1,4 @@
-import { Glass, glassColors, glassThemeTint, glassPresets, withPreset } from "@polinetwork/glass"
+import { Glass, glassColors, glassPresets, glassThemeTint, withPreset } from "@polinetwork/glass"
 import { useSyncExternalStore } from "react"
 import { cn } from "@/lib/utils"
 import { LENS_COLOR, lensOptions } from "./showcase/glass"

@@ -41,7 +41,7 @@ const prefersReducedMotion = () =>
 // Touches on the screen, so a press that was handed over to a scroll can tell whether its finger is still down
 // (pointer events stop once the browser scrolls)
 let touchesDown = 0
-let watching = false
+let watching: boolean = false
 function watchTouches() {
   if (watching || typeof document === "undefined") return
   watching = true
@@ -83,8 +83,8 @@ export function attachGlassPress(el: HTMLElement, options: GlassPressOptions = {
   el.style.userSelect = "none"
   ;(el.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = "none"
 
-  let hovered = false
-  let active = false
+  let hovered: boolean = false
+  let active: boolean = false
   let settleTimer: ReturnType<typeof setTimeout> | undefined
   /** The z-index the element had before it was raised for the gesture, while it is raised */
   let raisedFrom: string | null = null

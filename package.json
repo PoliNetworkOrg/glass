@@ -44,11 +44,7 @@
     "vite": "^7.3.8"
   },
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "@swc/core",
-      "@tailwindcss/oxide",
-      "esbuild"
-    ],
+    "onlyBuiltDependencies": ["@swc/core", "@tailwindcss/oxide", "esbuild"],
     "overrides": {
       "@polinetwork/glass": "link:packages/glass"
     }
