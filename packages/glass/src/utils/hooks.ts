@@ -1,8 +1,8 @@
 import { useMotionValue } from "motion/react"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { RectReadOnly } from "react-use-measure"
-import type { Texture } from "three"
-import { getTexture } from "./texture"
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { releaseSnapshot } from "../3D/renderer"
+import { watchFrames } from "./frames"
+import { onMediaChange, type Snapshot, snapshot } from "./snapshot"
 
 /**
  * React hook to handle async initializers
@@ -19,67 +19,176 @@ export function useAwait<T>(asyncfn: () => Promise<T>): T | null {
   return data
 }
 
+/** How long after a capture with new images it is taken again, see `fresh` of the snapshot */
+const RETAKE_MS = 400
+/** How long to wait after an image or a font loads before capturing, so a burst of them is captured once */
+const LOAD_SETTLE_MS = 150
+
 /**
- *  # useBackgroundTexture
- * React hook to load and update the background texture based on the document element.
+ * Resolves after the next frame has been drawn. Almost every step of a capture resolves as a microtask, so captures
+ * taken one after the other would never let the page draw a frame: there is one between them, which keeps a resize
+ * at full frame rate with a capture on most frames.
+ */
+const afterNextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+
+/**
+ *  # usePageSnapshot
+ * React hook to capture the page, and capture it again when it changes.
  *
- * It uses a ResizeObserver to monitor changes to the document layout and updates
- * the texture accordingly.
+ * The page is captured again when `deps` or `blur` change, when it changes size, and when an image or a font
+ * finishes loading, since the capture before it was taken without them.
  *
  * ### Note
- * This hook ensures that if multiple updates are triggered in quick succession,
- * it will only perform the necessary updates to avoid redundant texture loads,
- * since calling {@link html2canvas} can be quite heavy.
+ * One capture runs at a time: whatever asks for one while it runs gets a single capture after it, a frame later. So
+ * while the page keeps changing (a window being resized) it is captured about once a frame, and each one is shown,
+ * since it is newer than the one on screen.
  *
- * @param deps The dependency array for the texture to be considered invalid, passed to {@link useEffect}
- * @returns The current background texture, or null if not yet loaded
+ * @param deps The dependency array for the picture to be considered out of date, passed to {@link useEffect}
+ * @param blur Blur amount for the picture
+ * @param enabled When false nothing is captured, which is the expensive part, and there is no picture
+ * @returns The current picture of the page, or null if not yet captured
  */
-export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Texture | null {
-  const promiseRef = useRef<Promise<Texture> | null>(null) // current texture promise
-  const secondRef = useRef<boolean>(false) // flag to indicate if a second update is needed
-  const [texture, setTexture] = useState<Texture | null>(null)
+export function usePageSnapshot(deps: unknown[] = [], blur: number = 0, enabled: boolean = true): Snapshot | null {
+  const [picture, setPicture] = useState<Snapshot | null>(null)
+  const blurRef = useRef(blur)
+  blurRef.current = blur
 
-  const updateTexture = useCallback(async () => {
-    secondRef.current = false // reset second update flag
-    promiseRef.current = getTexture(document.documentElement, blur) // start new texture promise
-    const tex = await promiseRef.current // wait for texture to be ready
-    promiseRef.current = null // clear current promise
-
-    if (secondRef.current) {
-      // if a second update was requested, do it again
-      void updateTexture()
-    } else {
-      setTexture(tex)
+  const capturer = useMemo(() => {
+    const state = {
+      on: false,
+      running: false,
+      /** Something asked for a capture while one was running */
+      again: false,
+      /** The size of the page when it was last captured: a ResizeObserver reports it once when it starts, as a change */
+      size: "",
     }
-  }, [blur])
+    let timer: ReturnType<typeof setTimeout> | undefined
 
-  // Function to dispatch texture update
-  const dispatchUpdate = useCallback(() => {
-    if (!promiseRef.current) {
-      // if no update is in progress, start one
-      void updateTexture()
-    } else {
-      // if an update is already in progress, mark for a second update
-      secondRef.current = true
+    /** Captures the page after `ms`, or after the last of the calls that come in the meantime */
+    const schedule = (ms = 0) => {
+      if (!state.on) return
+      clearTimeout(timer)
+      timer = setTimeout(() => void run(), ms)
     }
-  }, [updateTexture])
+
+    const run = async () => {
+      if (state.running) {
+        state.again = true
+        return
+      }
+      state.running = true
+      do {
+        state.again = false
+        state.size = pageSize()
+        try {
+          const next = await snapshot(blurRef.current)
+          // a capture that ended after the glass was turned off is thrown away
+          if (state.on) setPicture(next)
+          else releaseSnapshot(next)
+          // one with an image no capture had before is taken again, in case WebKit drew it before decoding it, and
+          // one where an image failed to load, to ask for it again
+          if (next.fresh) schedule(RETAKE_MS)
+        } catch {
+          /* the page couldn't be drawn, the glass keeps the picture it had */
+        }
+        if (state.again) await afterNextFrame()
+      } while (state.again && state.on)
+      state.running = false
+    }
+
+    return {
+      schedule,
+      resized() {
+        if (pageSize() !== state.size) schedule()
+      },
+      start() {
+        state.on = true
+        schedule()
+      },
+      stop() {
+        state.on = false
+        clearTimeout(timer)
+        state.size = ""
+      },
+    }
+  }, [])
 
   useEffect(() => {
-    const observer = new ResizeObserver(() => {
-      dispatchUpdate()
-    })
+    if (!enabled) {
+      setPicture(null)
+      return
+    }
+    capturer.start()
+    const observer = new ResizeObserver(() => capturer.resized())
     observer.observe(document.documentElement)
-    return () => {
-      observer.disconnect()
+    // a load event doesn't bubble, but it can be caught on its way down
+    const loaded = (e: Event) => {
+      if (e.target instanceof HTMLImageElement) capturer.schedule(LOAD_SETTLE_MS)
     }
-  }, [dispatchUpdate])
+    const fontsLoaded = () => capturer.schedule(LOAD_SETTLE_MS)
+    document.addEventListener("load", loaded, true)
+    document.fonts.addEventListener("loadingdone", fontsLoaded)
+    // the page restyled by a media query (the device's theme) looks different at the same size
+    const stopMedia = onMediaChange(() => capturer.schedule())
+    return () => {
+      capturer.stop()
+      observer.disconnect()
+      document.removeEventListener("load", loaded, true)
+      document.fonts.removeEventListener("loadingdone", fontsLoaded)
+      stopMedia()
+    }
+  }, [capturer, enabled])
 
-  useEffect(() => {
-    dispatchUpdate()
-  }, deps)
+  useEffect(() => capturer.schedule(), [capturer, blur, ...deps])
 
-  return texture
+  // a picture is the whole page, so the one that was replaced has to be freed, or each capture leaves one on the GPU
+  useEffect(
+    () => () => {
+      if (picture) releaseSnapshot(picture)
+    },
+    [picture]
+  )
+
+  return picture
 }
+
+const pageSize = () => `${document.documentElement.scrollWidth}x${document.documentElement.scrollHeight}`
+
+/**
+ * The rectangle of an element as it is drawn (transforms included), and the size of its box before them: the
+ * canvas of a glass has the second and draws the first.
+ */
+export type GlassBounds = {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+  readonly left: number
+  readonly layoutWidth: number
+  readonly layoutHeight: number
+}
+
+const boundsOf = (rect: DOMRect, layoutWidth: number, layoutHeight: number): GlassBounds => ({
+  x: rect.x,
+  y: rect.y,
+  width: rect.width,
+  height: rect.height,
+  top: rect.top,
+  right: rect.right,
+  bottom: rect.bottom,
+  left: rect.left,
+  layoutWidth,
+  layoutHeight,
+})
+
+const sameRect = (a: GlassBounds, b: DOMRect) =>
+  Math.abs(a.x - b.x) < 0.01 &&
+  Math.abs(a.y - b.y) < 0.01 &&
+  Math.abs(a.width - b.width) < 0.01 &&
+  Math.abs(a.height - b.height) < 0.01
 
 /**
  * # useMotionBounds
@@ -87,17 +196,20 @@ export function useBackgroundTexture(deps: unknown[] = [], blur: number = 0): Te
  *
  * Having the bounds as motion values allows for smooth animations without constant re-renders.
  *
- * It accounts for visual viewport offsets and updates on resize and scroll events.
- * @see https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport
+ * The rectangle is where the element is drawn, transforms included. Only the 3D glass, which `watch`es it, needs where
+ * that is: a transform (a press, a transition, an animation) moves it without an event, so it is read on every frame
+ * then, and only changes when it moved. Otherwise it is read when the element changes size, which is all the CSS glass
+ * needs of it: following the scroll as well read the rectangle of every CSS glass on the page on every scroll event.
  *
  * _The DOM is the biggest threat to performance yet again_
  *
+ * @param watch Read the rectangle on every frame. Costs a read of it per frame, so only for what is being drawn.
  * @return A tuple containing:
  *   - A ref to be attached to the target DOM element.
  *   - A MotionValue representing the bounding rectangle of the element.
  */
-export function useMotionBounds() {
-  const motionValues = useMotionValue<RectReadOnly>({
+export function useMotionBounds(watch = false) {
+  const motionValues = useMotionValue<GlassBounds>({
     x: 0,
     y: 0,
     width: 0,
@@ -106,70 +218,44 @@ export function useMotionBounds() {
     right: 0,
     bottom: 0,
     left: 0,
+    layoutWidth: 0,
+    layoutHeight: 0,
   })
   const ref = useRef<HTMLDivElement | null>(null)
 
-  // // the offsets in size for the visual viewport, or safari stutters like crazy
-  // // thanks, apple
-  // const vpOffsets = useMotionValue({ w: 0, h: 0 })
-  // useAnimationFrame(() => {
-  //   if (window.visualViewport) {
-  //     vpOffsets.set({
-  //       w: window.visualViewport.width - window.innerWidth,
-  //       h: window.visualViewport.height - window.innerHeight,
-  //     })
-  //   }
-  // })
-
   useEffect(() => {
-    const updatePosition = () => {
+    const update = () => {
       if (ref.current) {
-        const rect = ref.current.getBoundingClientRect()
-        const { x, y, width, height, top, right, bottom, left } = rect
-        motionValues.set({ x, y, width, height, top, right, bottom, left })
+        motionValues.set(
+          boundsOf(ref.current.getBoundingClientRect(), ref.current.offsetWidth, ref.current.offsetHeight)
+        )
       }
     }
+    update()
+    // while it is watched every frame reads it, and the observer would only read it again
+    if (watch || !ref.current) return
+    const observer = new ResizeObserver(update)
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [ref.current, watch])
 
-    // everything that counld change the element's position or size
-    const observer = new ResizeObserver(updatePosition)
-    if (ref.current) {
-      observer.observe(ref.current)
-      observer.observe(document.documentElement)
-      window.addEventListener("scroll", updatePosition, { passive: true })
-      window.addEventListener("resize", updatePosition, { passive: true })
-      window.visualViewport?.addEventListener("scroll", updatePosition, { passive: true })
-      window.visualViewport?.addEventListener("resize", updatePosition, { passive: true })
-    }
-
-    return () => {
-      observer.disconnect()
-      window.removeEventListener("scroll", updatePosition)
-      window.removeEventListener("resize", updatePosition)
-      window.visualViewport?.removeEventListener("scroll", updatePosition)
-      window.visualViewport?.removeEventListener("resize", updatePosition)
-    }
-  }, [ref.current])
-
-  // const bounds = useTransform(() => {
-  //   const offsets = vpOffsets.get()
-  //   const rect = motionValues.get()
-  //   return {
-  //     x: rect.x + offsets.w / 2,
-  //     y: rect.y + offsets.h / 2,
-  //     width: rect.width,
-  //     height: rect.height,
-  //     top: rect.top + offsets.h / 2,
-  //     right: rect.right + offsets.w / 2,
-  //     bottom: rect.bottom + offsets.h / 2,
-  //     left: rect.left + offsets.w / 2,
-  //   }
-  // })
+  useEffect(() => {
+    if (!watch) return
+    return watchFrames(() => {
+      const el = ref.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      if (sameRect(motionValues.get(), rect)) return
+      const bounds = boundsOf(rect, el.offsetWidth, el.offsetHeight)
+      return () => motionValues.set(bounds)
+    })
+  }, [watch, motionValues])
 
   return [ref, motionValues] as const
 }
 
 /**
- * # useReducedMotion
+ * # useIncreasedContrast
  * Simple hook to detect if the user has requested increased contrast.
  *
  * @returns true if the user has set a preference for increased contrast
@@ -197,7 +283,7 @@ export function useIncreasedContrast() {
 /**
  * # useComputedStyle
  *
- * React hook to compute a value based on the computed style of a DOM element.
+ * React hook to compute a value based on the computed style of a DOM element, again whenever the element resizes.
  *
  * @param transform callback function to create a value from the computed style of the element
  * @returns a tuple, with a ref for the element whose style needs to be referenced and the transformed value
@@ -205,35 +291,59 @@ export function useIncreasedContrast() {
 export function useComputedStyle<T extends HTMLElement, R>(transform: (style: CSSStyleDeclaration) => R) {
   const ref = useRef<T | null>(null)
   const [computed, setComputed] = useState<R | null>(null)
+  const latest = useRef(transform)
+  latest.current = transform
 
   useLayoutEffect(() => {
-    if (ref.current) {
-      const style = window.getComputedStyle(ref.current)
-      const result = transform(style)
-      setComputed(result)
+    const el = ref.current
+    if (!el) return
+    // read again when the element resizes, as a percentage resolves against its size. The state is kept when the
+    // result is the same, so a resize that changes nothing renders nothing
+    const read = () => {
+      const result = latest.current(window.getComputedStyle(el))
+      setComputed((prev) => (prev && JSON.stringify(prev) === JSON.stringify(result) ? prev : result))
     }
+    read()
+    const observer = new ResizeObserver(read)
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [ref.current])
 
   return [ref, computed] as const
 }
 
 /**
- * # useFailCondition
- * React hook to trigger a suspense fail condition based on a dynamic check.
+ * # useInView
+ * Tells whether an element is on the screen, or about to be.
  *
- * @param check A function that returns a boolean indicating whether to trigger
- * the fail condition
+ * Each 3D glass is a WebGL context and a render loop, so glass that is far off screen
+ * shouldn't have one. It starts as not in view, so nothing is built before it is seen.
+ *
+ * @param ref The element to watch
+ * @param rootMargin How far past the screen counts as in view, to be ready before a scroll gets there
+ * @returns true while the element is within the margin of the screen
  */
-export function useFailCondition(check: () => boolean) {
-  const condition = check()
-  const suspenderRef = useRef<Promise<never> | null>(null)
+export function useInView(ref: RefObject<Element | null>, rootMargin = "200px") {
+  const [inView, setInView] = useState(false)
 
-  if (condition) {
-    if (!suspenderRef.current) {
-      suspenderRef.current = new Promise<never>(() => {})
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    if (typeof IntersectionObserver === "undefined") {
+      setInView(true)
+      return
     }
-    throw suspenderRef.current
-  } else {
-    suspenderRef.current = null
-  }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // the last entry is where the element stands now
+        const entry = entries[entries.length - 1]
+        if (entry) setInView(entry.isIntersecting)
+      },
+      { rootMargin }
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref, rootMargin])
+
+  return inView
 }
