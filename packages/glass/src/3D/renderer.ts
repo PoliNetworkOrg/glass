@@ -327,6 +327,10 @@ class GlassRenderer {
       if (this.entries.size === 0) {
         this.stop?.()
         this.stop = null
+        // the lists of the last frame hold its glasses, and their elements and canvases with them
+        this.frameGlasses.length = 0
+        this.frameBelow.length = 0
+        this.frameDrawn.length = 0
       }
     }
   }
@@ -780,7 +784,11 @@ class GlassRenderer {
       else entry.glass = { target: entry.target, entry, state }
       glasses.push(entry.glass)
     }
-    if (glasses.length === 0) return
+    if (glasses.length === 0) {
+      this.frameBelow.length = 0
+      this.frameDrawn.length = 0
+      return
+    }
     const [scrollX, scrollY] = this.scroll(time, frameScroll.x, frameScroll.y, glasses[0].state.lead)
 
     // from the bottom layer up: each is drawn before the ones above it, which may be drawn over it
