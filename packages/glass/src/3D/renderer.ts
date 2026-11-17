@@ -578,7 +578,11 @@ class GlassRenderer {
       const hh = (o.drawn[1] * (o.height + OVERLAY_MARGIN * 2)) / o.height / 2
       if (cx + hw > rx && cx - hw < rx + rw && cy + hh > ry && cy - hh < ry + rh) under.push(other)
     }
-    if (under.length === 0) return null
+    if (under.length === 0) {
+      // nothing in it any more: let go of what it was last drawn from
+      entry.drawnFrom.length = 0
+      return null
+    }
     if (under.length > 1) under.sort(bottomUp)
 
     // What it is drawn from, compared with what it was last drawn from one value at a time, in place: no key to build
@@ -792,7 +796,13 @@ class GlassRenderer {
       for (const glass of glasses) {
         if (glass.state.layer !== layer) continue
         const { entry, state } = glass
-        const backdrop = below.length > 0 ? this.backdrop(glass, below, scrollX, scrollY) : null
+        let backdrop: Backdrop | null = null
+        if (below.length > 0) backdrop = this.backdrop(glass, below, scrollX, scrollY)
+        else if (entry.under.length > 0) {
+          // the glass below it went: let go of it and of what this was last drawn from
+          entry.under.length = 0
+          entry.drawnFrom.length = 0
+        }
         const same =
           entry.generation === this.generation &&
           entry.key === state.key &&
