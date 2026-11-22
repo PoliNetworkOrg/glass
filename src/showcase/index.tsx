@@ -25,6 +25,8 @@ import { gallery, moods, photos } from "./photos"
 // without it the glass has its default
 const leadParam = new URLSearchParams(window.location.search).get("lead")
 const scrollLead = leadParam === null ? undefined : Number(leadParam) || 0
+// `?worker=1` draws the glass in a worker (experimental), to compare it with the glass drawn on the page's frames
+const worker = new URLSearchParams(window.location.search).get("worker") === "1"
 
 // A page made with the glass, the way an app would use it (a floating header, controls over photos, a player, a tab
 // bar), as a magazine about cats. It is also the place to see what the glass costs, with as much of it on screen as a real page has, and more.
@@ -430,7 +432,7 @@ export function Showcase() {
 
   return (
     <ShowcaseContext.Provider value={context}>
-      <GlassProvider deps={[dark, mood]} scrollLead={scrollLead} scrollKeepalive={keepalive}>
+      <GlassProvider deps={[dark, mood]} scrollLead={scrollLead} scrollKeepalive={keepalive} worker={worker}>
         <div className={dark ? "dark" : ""}>
           <div className="min-h-screen bg-background text-foreground">
             {/* the fixed parts float over the glass of the page as it scrolls, so they are on a layer above it */}

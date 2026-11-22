@@ -25,7 +25,10 @@ function useStats() {
           fps: Math.round((frames * 1000) / (now - start)),
           worst: Math.round(worst),
           glass: document.querySelectorAll("._polinetwork_glass-content").length,
-          drawn: document.querySelectorAll("._polinetwork_glass-content > canvas").length,
+          // on its own, or in a holder where a worker draws it
+          drawn: document.querySelectorAll(
+            "._polinetwork_glass-content > canvas, ._polinetwork_glass-content > div > canvas"
+          ).length,
         })
         frames = 0
         worst = 0

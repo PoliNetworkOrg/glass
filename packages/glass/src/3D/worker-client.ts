@@ -1,0 +1,264 @@
+import { drawFrames, frameScroll } from "../utils/frames"
+import type { Renderer } from "./main"
+import { forgetPicture, takePicture, tickPictures } from "./pictures"
+import type { FromWorker, ToWorker } from "./protocol"
+import type { GlassState, GlassTarget, Picture } from "./renderer"
+import GlassWorker from "./worker?worker&inline"
+
+// The page's side of the renderer in a worker (worker.ts): it reads what only the page can, on its frames, and sends
+// what changed. The state of each glass when it changes; where the page is scrolled, on every frame and, while it moves,
+// from a loop that reads it every few ms between them, which hears of the scroll more often than the frames do on iOS
+// (51 positions a second against 33, measured in the Frame lab of the demo, more with the scroll keepalive); the
+// pictures of the page and of the elements, as bitmaps.
+
+/** How often the loop between the frames reads the scroll while the page moves, in ms */
+const TIGHT = 4
+/** How long the loop goes on after the scroll last moved, in ms */
+const TIGHT_FOR = 300
+/** Every how many frames of the page the worker is told when one started, to keep its own in step */
+const VSYNC_EVERY = 30
+
+const clock = () => performance.timeOrigin + performance.now()
+
+/** Whether this browser can hand a canvas to a worker, and send it pictures */
+export function workerSupported() {
+  return (
+    typeof Worker === "function" &&
+    typeof OffscreenCanvas === "function" &&
+    typeof createImageBitmap === "function" &&
+    typeof HTMLCanvasElement !== "undefined" &&
+    "transferControlToOffscreen" in HTMLCanvasElement.prototype
+  )
+}
+
+type Sent = {
+  id: number
+  /** The key of the state last sent, -1 for none */
+  key: number
+  nulled: boolean
+  order: number
+  /** The worker asked for the picture of what it has over its glass */
+  overlay: boolean
+}
+
+class WorkerRenderer implements Renderer {
+  private readonly worker: Worker
+  private readonly glasses = new Map<GlassTarget, Sent>()
+  private readonly byId = new Map<number, GlassTarget>()
+  private readonly pictureIds = new WeakMap<Picture, number>()
+  private ids = 0
+  private frames = 0
+  private stop: (() => void) | null = null
+  private reorder = true
+  private readonly last = { x: Number.NaN, y: Number.NaN }
+  /** The states of this frame, one list kept from frame to frame */
+  private readonly states: (GlassState | null)[] = []
+
+  constructor() {
+    this.worker = new GlassWorker()
+    this.worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
+      if (data.type === "overlay") {
+        const target = this.byId.get(data.id)
+        const sent = target && this.glasses.get(target)
+        if (sent) sent.overlay = true
+      } else console.warn(`glass: the worker can't draw: ${data.reason}`)
+    }
+  }
+
+  private post(message: ToWorker, transfer: Transferable[] = []) {
+    this.worker.postMessage(message, transfer)
+  }
+
+  add(target: GlassTarget) {
+    const canvas = target.canvas as HTMLCanvasElement
+    const offscreen = canvas.transferControlToOffscreen()
+    const id = ++this.ids
+    this.glasses.set(target, { id, key: -1, nulled: false, order: 0, overlay: false })
+    this.byId.set(id, target)
+    this.reorder = true
+    this.post({ type: "add", id, canvas: offscreen }, [offscreen])
+    if (!this.stop) {
+      const stopFrames = drawFrames((time) => this.tick(time))
+      const stopFeed = feedScroll((t, x, y) => this.sample(t, x, y))
+      this.stop = () => {
+        stopFrames()
+        stopFeed()
+      }
+    }
+    return () => {
+      this.glasses.delete(target)
+      this.byId.delete(id)
+      forgetPicture(target)
+      this.post({ type: "remove", id })
+      if (this.glasses.size === 0) {
+        this.stop?.()
+        this.stop = null
+        this.states.length = 0
+      }
+    }
+  }
+
+  release(snapshot: Picture) {
+    const id = this.pictureIds.get(snapshot)
+    if (id === undefined) return
+    this.pictureIds.delete(snapshot)
+    this.post({ type: "release", id })
+  }
+
+  /** Sends where the page is scrolled, if it moved: says whether it did */
+  private sample(t: number, x: number, y: number) {
+    if (x === this.last.x && y === this.last.y) return false
+    this.last.x = x
+    this.last.y = y
+    this.post({ type: "scroll", t, x, y })
+    return true
+  }
+
+  /** The id of a picture of the page in the worker, sent the first time it is asked for */
+  private picture(snapshot: Picture) {
+    let id = this.pictureIds.get(snapshot)
+    if (id !== undefined) return id
+    id = ++this.ids
+    const sent = id
+    this.pictureIds.set(snapshot, id)
+    // taken now, before the canvas can be freed; flipped here, as a bitmap isn't by the GPU
+    createImageBitmap(snapshot.canvas, { imageOrientation: "flipY", premultiplyAlpha: "none" })
+      .then((bitmap) =>
+        this.post({ type: "snapshot", id: sent, bitmap, width: snapshot.width, height: snapshot.height }, [bitmap])
+      )
+      .catch(() => {
+        /* the canvas was freed first: a newer picture takes its place */
+      })
+    return id
+  }
+
+  private tick(time: number) {
+    tickPictures(time)
+    if (this.frames++ % VSYNC_EVERY === 0) this.post({ type: "vsync", t: performance.timeOrigin + time })
+    const t = clock()
+    this.sample(t, frameScroll.x, frameScroll.y)
+
+    const states = this.states
+    states.length = 0
+    for (const target of this.glasses.keys()) states.push(target.frame(time))
+    if (this.reorder) {
+      // where each is in the document, which decides which of two on a layer is drawn over the other
+      const ordered: [Sent, HTMLElement][] = []
+      let i = 0
+      for (const sent of this.glasses.values()) {
+        const element = states[i++]?.element
+        if (element) ordered.push([sent, element])
+      }
+      ordered.sort(([, a], [, b]) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      ordered.forEach(([sent], n) => {
+        sent.order = n
+        sent.key = -1
+      })
+      this.reorder = ordered.length < this.glasses.size
+    }
+
+    let i = 0
+    for (const [target, sent] of this.glasses) {
+      const state = states[i++]
+      if (!state) {
+        if (!sent.nulled) this.post({ type: "state", id: sent.id, state: null })
+        sent.nulled = true
+        sent.key = -1
+        continue
+      }
+      sent.nulled = false
+      if (sent.overlay && state.element) {
+        takePicture(target, state.element, (canvas) => {
+          createImageBitmap(canvas, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" })
+            .then((bitmap) => this.post({ type: "overlay", id: sent.id, bitmap }, [bitmap]))
+            .catch(() => {})
+        })
+      }
+      if (state.key === sent.key) continue
+      sent.key = state.key
+      this.post({
+        type: "state",
+        id: sent.id,
+        state: {
+          snapshot: this.picture(state.snapshot),
+          layer: state.layer,
+          order: sent.order,
+          width: state.width,
+          height: state.height,
+          drawn: state.drawn,
+          center: state.center,
+          scroll: [frameScroll.x, frameScroll.y],
+          t,
+          lead: state.lead,
+          saturate: state.saturate,
+          lift: state.lift,
+          uniforms: state.uniforms,
+        },
+      })
+    }
+  }
+}
+
+/**
+ * Reads where the page is scrolled between its frames, while it moves or a finger is on it: on a scroll event, and in a
+ * loop of a message, for a task of its own, then a timer, every {@link TIGHT} ms. `sample` says whether it moved.
+ */
+function feedScroll(sample: (t: number, x: number, y: number) => boolean) {
+  const channel = new MessageChannel()
+  const loop = { running: false, until: 0, touching: false }
+  const read = () => sample(clock(), window.scrollX, window.scrollY)
+  const post = () => channel.port2.postMessage(0)
+  channel.port1.onmessage = () => {
+    const now = performance.now()
+    if (read()) loop.until = now + TIGHT_FOR
+    if (loop.touching || now < loop.until) setTimeout(post, TIGHT)
+    else loop.running = false
+  }
+  const kick = () => {
+    loop.until = performance.now() + TIGHT_FOR
+    if (!loop.running) {
+      loop.running = true
+      post()
+    }
+  }
+  const onScroll = () => {
+    read()
+    kick()
+  }
+  const onTouchStart = () => {
+    loop.touching = true
+    kick()
+  }
+  const onTouchEnd = (e: TouchEvent) => {
+    loop.touching = e.touches.length > 0
+  }
+  const opts = { passive: true, capture: true }
+  window.addEventListener("scroll", onScroll, opts)
+  window.addEventListener("touchstart", onTouchStart, opts)
+  window.addEventListener("touchend", onTouchEnd, opts)
+  window.addEventListener("touchcancel", onTouchEnd, opts)
+  return () => {
+    loop.touching = false
+    loop.until = 0
+    channel.port1.close()
+    window.removeEventListener("scroll", onScroll, opts)
+    window.removeEventListener("touchstart", onTouchStart, opts)
+    window.removeEventListener("touchend", onTouchEnd, opts)
+    window.removeEventListener("touchcancel", onTouchEnd, opts)
+  }
+}
+
+let client: WorkerRenderer | null | undefined
+
+/** The renderer in a worker, made the first time it is asked for with `create`: null where the browser can't */
+export function getWorkerRenderer(create = true): Renderer | null {
+  if (client === undefined) {
+    if (!create) return null
+    try {
+      client = workerSupported() ? new WorkerRenderer() : null
+    } catch {
+      client = null
+    }
+  }
+  return client
+}

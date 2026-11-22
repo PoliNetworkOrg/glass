@@ -1,6 +1,3 @@
-import { drawFrames, frameScroll } from "../utils/frames"
-import { createPredictor } from "../utils/predict"
-import { onMediaChange, type Snapshot, snapshotElement } from "../utils/snapshot"
 import { GLASS_FRAGMENT, GLASS_VERTEX, PAGE_FRAGMENT, PAGE_VERTEX } from "./composite"
 import {
   BLUR_FRAGMENT,
@@ -29,13 +26,27 @@ import {
 // of the layers below as it was drawn, with what each has over its glass (its tint, its edges, its content, from a
 // picture of the element, taken when it changes). That backdrop is drawn for the region the layer covers, only when
 // something in it moved or changed.
+//
+// Nothing here touches the page: what runs on its frames, where it is scrolled and the pictures of the elements come
+// from a host (main.ts on the page's thread, worker.ts in a worker), so the same renderer runs in either.
+
+/** A picture the renderer uploads: of the page, or of what a glass has over its glass */
+export type Picture = {
+  /** The pixels, flipped as the GPU reads them where they are a bitmap (see `imageOrientation`) */
+  canvas: HTMLCanvasElement | ImageBitmap
+  /** The size of what it shows, in CSS px, which can be bigger than the pixels */
+  width: number
+  height: number
+}
 
 /** Where a glass is and how it is drawn, on a frame */
 export type GlassState = {
-  snapshot: Snapshot
+  snapshot: Picture
   layer: number
-  /** The element of the glass, whose picture is what it has over its glass */
-  element: HTMLElement
+  /** The element of the glass, whose picture is what it has over its glass: null in a worker, which has no page */
+  element: HTMLElement | null
+  /** Where it is in the order of the document, among the glass, where there is no element to ask */
+  order: number
   /** The size of the box of the element, which is the size of its canvas, in px */
   width: number
   height: number
@@ -60,8 +71,8 @@ export type GlassState = {
 }
 
 export type GlassTarget = {
-  /** The canvas the glass is shown on */
-  canvas: HTMLCanvasElement
+  /** The canvas the glass is shown on: its own in a worker, handed over by the page */
+  canvas: HTMLCanvasElement | OffscreenCanvas
   /** Called on every frame: where it is and how it is drawn, or null where it has no size */
   frame: (time: number) => GlassState | null
 }
@@ -69,19 +80,9 @@ export type GlassTarget = {
 /** How wide the canvas the glasses are copied to is let to grow before they are put on more rows */
 const ROW_WIDTH = 2048
 /** How much of what is around a glass is in the picture of what it has over its glass, in px */
-const OVERLAY_MARGIN = 8
+export const OVERLAY_MARGIN = 8
 /** How much more than its frost reads is drawn behind a higher layer, around its glass, in px */
 const BACKDROP_MARGIN = 4
-/**
- * The pictures of what a glass has over it wait while the page scrolls faster than this, in px per ms, and for `CALM`
- * ms after: each one lays out and paints a copy of the element with all of the page's CSS on the main thread, and
- * during a flick the header and tab bar ran into a new caption bar every 50ms or so, which made frames late and a
- * megabyte a second of garbage. Until its picture is taken, a glass shows under a higher layer without what it has
- * over its glass, for as long as it moves too fast to read.
- */
-const CAPTURE_SPEED = 0.5
-const CALM = 100
-
 /** A new number for a new state of a glass: its key, see {@link GlassState} */
 let keys = 0
 export const nextKey = () => ++keys
@@ -155,15 +156,32 @@ const blurReach = (sigma: number) => Math.ceil(sigma * 3)
 /** A texture that is drawn into */
 type Target = { fbo: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number }
 
-/** The picture of what a glass has over its glass, and whether it is still what the element looks like */
-type Overlay = {
-  canvas: HTMLCanvasElement | null
+/**
+ * The picture of what a glass has over its glass, which the host takes and puts here: a new `canvas`, `uploaded` false
+ * and the `version` one more, each time it is taken again
+ */
+export type Overlay = {
+  canvas: HTMLCanvasElement | ImageBitmap | null
   texture: WebGLTexture | null
   uploaded: boolean
   version: number
-  stale: boolean
-  capturing: boolean
-  disconnect: () => void
+  /** Called when the glass goes */
+  dispose: () => void
+}
+
+/** What the renderer needs from where it runs */
+export type RendererHost = {
+  /** Calls `draw` on every frame to draw, until the function it returns is called */
+  frames: (draw: (time: number) => void) => () => void
+  /** Called first on every frame drawn */
+  tick?: (time: number) => void
+  /** Where the page will be scrolled `lead` ms after `time` (ahead as the glass is, see `scrollLead`) */
+  scroll: (time: number, lead: number) => readonly [number, number]
+  /**
+   * Keeps `overlay` the picture of what `target` has over its glass, called on every frame a layer above needs it.
+   * The first call is where the host starts watching the glass.
+   */
+  overlay: (target: GlassTarget, state: GlassState, overlay: Overlay) => void
 }
 
 type Entry = {
@@ -174,7 +192,7 @@ type Entry = {
   output: Target | null
   /** What it was drawn with: its key, its picture of the page and the version of its backdrop (0 for none) */
   key: number
-  snapshot: Snapshot | null
+  snapshot: Picture | null
   backdrop: number
   /** The time the context had come back, when it was drawn */
   generation: number
@@ -199,8 +217,12 @@ type Glass = { target: GlassTarget; entry: Entry; state: GlassState }
  */
 type Backdrop = Target & { version: number; region: [number, number, number, number] }
 
-const followsInDocument = (a: Glass, b: Glass) =>
-  a.state.element.compareDocumentPosition(b.state.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+const followsInDocument = (a: Glass, b: Glass) => {
+  const x = a.state.element
+  const y = b.state.element
+  if (!x || !y) return a.state.order - b.state.order
+  return x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+}
 /** From the bottom up: by layer, then in the order of the document */
 const bottomUp = (a: Glass, b: Glass) => a.state.layer - b.state.layer || followsInDocument(a, b)
 const ascending = (a: number, b: number) => a - b
@@ -212,7 +234,8 @@ const put = (list: unknown[], i: number, value: unknown) => {
   return true
 }
 
-class GlassRenderer {
+export class GlassRenderer {
+  private readonly host: RendererHost
   private readonly canvas: OffscreenCanvas | HTMLCanvasElement
   private readonly gl: WebGL2RenderingContext
   private glass!: Program
@@ -220,13 +243,11 @@ class GlassRenderer {
   private page!: Program
   private composite!: Program
   private blur!: Program
-  private readonly textures = new Map<Snapshot, WebGLTexture>()
+  private readonly textures = new Map<Picture, WebGLTexture>()
   /** The pictures blurred by a frost, by its sigma */
-  private readonly blurs = new Map<Snapshot, Map<number, Target>>()
+  private readonly blurs = new Map<Picture, Map<number, Target>>()
   private readonly entries = new Map<GlassTarget, Entry>()
-  private readonly contexts = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D | null>()
-  /** Where the page is scrolled, ahead by the lead as the glass is */
-  private readonly scroll = createPredictor()
+  private readonly contexts = new WeakMap<object, CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null>()
   /**
    * The lists a frame is drawn with, emptied and filled again on every one: this runs on every frame, and new lists
    * each time were garbage that Safari collected in pauses of 30 to 60ms
@@ -237,17 +258,13 @@ class GlassRenderer {
   private readonly frameDrawn: Glass[] = []
   /** Counts the drawings of the backdrops, for their versions */
   private backdropVersion = 0
-  /** The time of this frame, and the last one the page scrolled faster than {@link CAPTURE_SPEED} */
-  private now = 0
-  private fastAt = Number.NEGATIVE_INFINITY
   private stop: (() => void) | null = null
   private lost = false
-  /** One picture of an element is taken at a time */
-  private capturing = false
   /** Counts the times the context came back, so the glasses know to draw again */
   private generation = 0
 
-  constructor() {
+  constructor(host: RendererHost) {
+    this.host = host
     this.canvas = typeof OffscreenCanvas === "function" ? new OffscreenCanvas(1, 1) : document.createElement("canvas")
     const gl = this.canvas.getContext("webgl2", {
       alpha: true,
@@ -260,11 +277,6 @@ class GlassRenderer {
     if (!gl) throw new Error("glass: no WebGL2")
     this.gl = gl
     this.compile()
-
-    // the pictures of the elements too look different when a media query of the page changes (the device's theme)
-    onMediaChange(() => {
-      for (const entry of this.entries.values()) if (entry.overlay) entry.overlay.stale = true
-    })
 
     const canvas = this.canvas as EventTarget
     canvas.addEventListener("webglcontextlost", (e) => {
@@ -319,7 +331,7 @@ class GlassRenderer {
       frosted: null,
       across: null,
     })
-    this.stop ??= drawFrames((time) => this.draw(time))
+    this.stop ??= this.host.frames((time) => this.draw(time))
     return () => {
       const entry = this.entries.get(target)
       this.entries.delete(target)
@@ -339,7 +351,7 @@ class GlassRenderer {
     const gl = this.gl
     for (const target of [entry.output, entry.behind, entry.frosted, entry.across]) if (target) this.drop(target)
     if (entry.overlay) {
-      entry.overlay.disconnect()
+      entry.overlay.dispose()
       if (entry.overlay.texture) gl.deleteTexture(entry.overlay.texture)
     }
   }
@@ -350,7 +362,7 @@ class GlassRenderer {
   }
 
   /** Frees the GPU copies of a picture that is no longer drawn: as it is, and blurred */
-  release(snapshot: Snapshot) {
+  release(snapshot: Picture) {
     const texture = this.textures.get(snapshot)
     if (texture) this.gl.deleteTexture(texture)
     this.textures.delete(snapshot)
@@ -363,7 +375,7 @@ class GlassRenderer {
    * pixel of the picture to a pixel of its canvas, and its frost reads a blur of it, so they would only take a third
    * more memory and a pass over the whole page on every capture.
    */
-  private texture(snapshot: Snapshot) {
+  private texture(snapshot: Picture) {
     const gl = this.gl
     let texture = this.textures.get(snapshot)
     if (texture) return texture
@@ -387,7 +399,7 @@ class GlassRenderer {
    * blur wherever the glass bends the page, so it is the page that is blurred, once, and the glass reads it once a
    * pixel: averaging the page around each pixel of each glass on each frame took 25 reads a pixel, 75 with dispersion.
    */
-  private frosted(snapshot: Snapshot, frost: number) {
+  private frosted(snapshot: Picture, frost: number) {
     if (frost <= 0) return this.texture(snapshot)
     const sigma = frostSigma(frost)
     let bySigma = this.blurs.get(snapshot)
@@ -486,71 +498,14 @@ class GlassRenderer {
     return { fbo, texture, width: w, height: h }
   }
 
-  /**
-   * Takes the picture of what a glass has over its glass, the first time a layer above needs it and again when the
-   * element changes (its content, its attributes, its size). The press of a glass moves and lights its element
-   * through its own style, and its canvas is redrawn on every frame, so neither counts.
-   */
+  /** The picture of what a glass has over its glass, which the host keeps */
   private overlay(entry: Entry, state: GlassState): Overlay {
     let overlay = entry.overlay
     if (!overlay) {
-      const el = state.element
-      const created: Overlay = {
-        canvas: null,
-        texture: null,
-        uploaded: false,
-        version: 0,
-        stale: true,
-        capturing: false,
-        disconnect: () => {},
-      }
-      const mutations = new MutationObserver((records) => {
-        const own = (r: MutationRecord) =>
-          r.type === "attributes" && (r.target === el || r.target instanceof HTMLCanvasElement)
-        if (records.some((r) => !own(r))) created.stale = true
-      })
-      mutations.observe(el, { subtree: true, childList: true, attributes: true, characterData: true })
-      // it reports the size it starts with too, which the picture about to be taken already has
-      let size: string = ""
-      const resizes = new ResizeObserver(([entry]) => {
-        const next = `${entry.contentRect.width}x${entry.contentRect.height}`
-        if (size && next !== size) created.stale = true
-        size = next
-      })
-      resizes.observe(el)
-      created.disconnect = () => {
-        mutations.disconnect()
-        resizes.disconnect()
-      }
-      overlay = created
-      entry.overlay = created
+      overlay = { canvas: null, texture: null, uploaded: false, version: 0, dispose: () => {} }
+      entry.overlay = overlay
     }
-    const calm = this.now - this.fastAt >= CALM
-    if (overlay.stale && !overlay.capturing && !this.capturing && calm) {
-      const o = overlay
-      o.capturing = true
-      o.stale = false
-      this.capturing = true
-      snapshotElement(state.element, OVERLAY_MARGIN)
-        .then(({ canvas, fresh }) => {
-          o.canvas = canvas
-          o.uploaded = false
-          o.version++
-          // taken again a moment later, in case WebKit drew it before decoding the images that are new in it
-          if (fresh) {
-            setTimeout(() => {
-              o.stale = true
-            }, 400)
-          }
-        })
-        .catch(() => {
-          /* the element couldn't be drawn: the glass is shown without what it has over it */
-        })
-        .finally(() => {
-          o.capturing = false
-          this.capturing = false
-        })
-    }
+    this.host.overlay(entry.target, state, overlay)
     return overlay
   }
 
@@ -773,8 +728,7 @@ class GlassRenderer {
 
   private draw(time: number) {
     if (this.lost || this.gl.isContextLost()) return
-    this.now = time
-    if (frameScroll.speed > CAPTURE_SPEED) this.fastAt = time
+    this.host.tick?.(time)
     const glasses = this.frameGlasses
     glasses.length = 0
     for (const entry of this.entries.values()) {
@@ -789,7 +743,7 @@ class GlassRenderer {
       this.frameDrawn.length = 0
       return
     }
-    const [scrollX, scrollY] = this.scroll(time, frameScroll.x, frameScroll.y, glasses[0].state.lead)
+    const [scrollX, scrollY] = this.host.scroll(time, glasses[0].state.lead)
 
     // from the bottom layer up: each is drawn before the ones above it, which may be drawn over it
     const layers = this.frameLayers
@@ -893,35 +847,11 @@ class GlassRenderer {
       }
       let ctx = this.contexts.get(out)
       if (ctx === undefined) {
-        ctx = out.getContext("2d")
+        ctx = (out as OffscreenCanvas).getContext("2d")
         this.contexts.set(out, ctx)
       }
       ctx?.drawImage(source, sx, sy, state.width, state.height, 0, 0, state.width, state.height)
     })
     if (source instanceof ImageBitmap) source.close()
   }
-}
-
-/** The renderer, made the first time it is asked for: null where the device has no WebGL2 */
-let renderer: GlassRenderer | null | undefined
-
-export function getRenderer(): GlassRenderer | null {
-  if (renderer === undefined) {
-    try {
-      renderer = typeof document === "undefined" ? null : new GlassRenderer()
-    } catch {
-      renderer = null
-    }
-  }
-  return renderer
-}
-
-/**
- * Frees a picture of the page, once nothing draws it anymore: its copy on the GPU, and its canvas, which is as big as
- * the page and which iOS counts against a cap on the memory of all the canvases of the page until it is collected.
- */
-export function releaseSnapshot(snapshot: Snapshot) {
-  renderer?.release(snapshot)
-  snapshot.canvas.width = 0
-  snapshot.canvas.height = 0
 }
