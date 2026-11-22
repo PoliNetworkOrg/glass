@@ -4,6 +4,7 @@ import "./index.css"
 import App from "./App.tsx"
 import { useRoute } from "./router"
 import { Showcase } from "./showcase"
+import { Ambient } from "./showcase/ambient"
 
 function Root() {
   const route = useRoute()
@@ -11,6 +12,7 @@ function Root() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [route])
+  if (route === "ambient") return <Ambient />
   return route === "showcase" ? <Showcase /> : <App />
 }
 

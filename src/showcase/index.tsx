@@ -47,10 +47,12 @@ function Header({ dark, onDarkChange }: { dark: boolean; onDarkChange: (dark: bo
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Whisker Weekly, back to the top"
           className="flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold tracking-tight"
         >
           <Cat className="size-5" />
-          <span>
+          {/* on the narrowest phones the cat alone, so the page picker and the theme fit beside it */}
+          <span className="max-[359px]:hidden">
             Whisker<span className="hidden sm:inline"> Weekly</span>
           </span>
         </button>
