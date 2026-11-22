@@ -1,3 +1,4 @@
+export { getWorkerDrawRate } from "./3D/worker-client"
 export type { GlassElevation, GlassTheme } from "./edge"
 export { Glass, GlassLayer, type GlassProps } from "./glass"
 export { GlassProvider } from "./glass-provider"

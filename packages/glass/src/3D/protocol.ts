@@ -45,5 +45,7 @@ export type ToWorker =
 export type FromWorker =
   /** Glass `id` is under a higher layer: send the picture of what it has over its glass, and again when it changes */
   | { type: "overlay"; id: number }
+  /** It drew `count` frames since its last report, up to `t` (a few times a second while it draws) */
+  | { type: "drew"; count: number; t: number }
   /** The worker can't draw (no WebGL2 in a worker) */
   | { type: "failed"; reason: string }

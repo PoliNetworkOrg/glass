@@ -67,7 +67,11 @@ class WorkerRenderer implements Renderer {
   constructor() {
     this.worker = new GlassWorker()
     this.worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
-      if (data.type === "overlay") {
+      if (data.type === "drew") {
+        drewCounts[drewNext] = data.count
+        drewTimes[drewNext] = data.t
+        drewNext = (drewNext + 1) % DREW_KEPT
+      } else if (data.type === "overlay") {
         const target = this.byId.get(data.id)
         const sent = target && this.glasses.get(target)
         if (sent) sent.overlay = true
@@ -274,6 +278,25 @@ function feedScroll(sample: (t: number, x: number, y: number) => boolean) {
 }
 
 let client: WorkerRenderer | null | undefined
+
+/** The last reports of the frames the worker drew, in a ring */
+const DREW_KEPT = 16
+const drewCounts = new Float64Array(DREW_KEPT)
+const drewTimes = new Float64Array(DREW_KEPT)
+let drewNext = 0
+
+/**
+ * How many frames a second the worker drew the glass over the last second, or null when no glass is drawn in a worker.
+ * Experimental, for measuring: the page's own frames are held to 60 on iOS, which a counter of them would show, while
+ * the worker draws on 120 a second.
+ */
+export function getWorkerDrawRate(): number | null {
+  if (!client || failure.failed) return null
+  const since = clock() - 1000
+  let count = 0
+  for (let i = 0; i < DREW_KEPT; i++) if (drewTimes[i] > since) count += drewCounts[i]
+  return count
+}
 /** The worker said it can't draw (no WebGL2 there): known only once it started */
 const failure = { failed: false, listeners: new Set<() => void>() }
 

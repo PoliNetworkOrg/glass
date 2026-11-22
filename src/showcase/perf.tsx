@@ -1,15 +1,16 @@
-import { GlassLayer } from "@polinetwork/glass"
+import { GlassLayer, getWorkerDrawRate } from "@polinetwork/glass"
 import { Activity } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { FrameLab } from "./frame-lab"
 import { type GlassMode, Segmented, ShowGlass } from "./glass"
 
-type Stats = { fps: number; worst: number; glass: number; drawn: number }
+/** `worker` is how many frames a second the worker drew the glass, null when it isn't drawn in one */
+type Stats = { fps: number; worst: number; glass: number; drawn: number; worker: number | null }
 
 /** Frames per second and the slowest frame over the last half second, and how much glass there is and is drawn in 3D */
 function useStats() {
-  const [stats, setStats] = useState<Stats>({ fps: 0, worst: 0, glass: 0, drawn: 0 })
+  const [stats, setStats] = useState<Stats>({ fps: 0, worst: 0, glass: 0, drawn: 0, worker: null })
   useEffect(() => {
     let frame = 0
     let frames = 0
@@ -29,6 +30,7 @@ function useStats() {
           drawn: document.querySelectorAll(
             "._polinetwork_glass-content > canvas, ._polinetwork_glass-content > div > canvas"
           ).length,
+          worker: getWorkerDrawRate(),
         })
         frames = 0
         worst = 0
@@ -86,6 +88,8 @@ export function PerfPanel({
           <span className="ml-auto flex items-center gap-1.5 font-mono text-xs font-normal tabular-nums">
             <span className={cn("size-2 rounded-full", smooth ? "bg-emerald-500" : "bg-amber-500")} />
             {stats.fps} fps
+            {/* the page's frames are held to 60 on iOS, the worker's aren't */}
+            {stats.worker !== null && <span className="opacity-60">· glass {stats.worker}/s</span>}
           </span>
         </button>
         {open && (

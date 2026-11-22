@@ -16,6 +16,8 @@ import { GlassRenderer, type GlassState, type GlassTarget, nextKey, type Overlay
 const PERIOD = 1000 / 120
 /** How long it keeps drawing after the last news, in ms */
 const AWAKE = 400
+/** Every how many ms it tells the page how many frames it drew, while it draws */
+const REPORT_EVERY = 250
 /** Under this, in px, a center or a scroll didn't move */
 const STILL_PX = 0.5
 
@@ -56,6 +58,15 @@ let phase = 0
 let slot = -1
 let timer: ReturnType<typeof setTimeout> | null = null
 let awakeUntil = 0
+/** The frames drawn since the last report to the page, which the demo shows */
+const drew = { count: 0, at: 0 }
+
+function report(now: number) {
+  if (drew.count === 0) return
+  scope.postMessage({ type: "drew", count: drew.count, t: now })
+  drew.count = 0
+  drew.at = now
+}
 
 function schedule(now: number) {
   const current = Math.floor((now - phase) / PERIOD)
@@ -66,11 +77,15 @@ function run() {
   timer = null
   const now = clock()
   const current = Math.floor((now - phase) / PERIOD)
-  if (current !== slot) {
+  if (current !== slot && draw) {
     slot = current
-    draw?.(now)
+    draw(now)
+    drew.count++
   }
-  if (draw && now < awakeUntil) schedule(now)
+  if (draw && now < awakeUntil) {
+    if (now - drew.at >= REPORT_EVERY) report(now)
+    schedule(now)
+  } else report(now)
 }
 
 function wake(ms = AWAKE) {
