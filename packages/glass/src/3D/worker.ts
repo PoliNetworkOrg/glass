@@ -43,6 +43,8 @@ type Model = {
   made: { sent: SentState | null; picture: Picture | null; cx: number; cy: number }
   overlay: Overlay | null
   asked: boolean
+  /** It has had a state, so how it moves is known from what it did, more than from what the page said it is */
+  known: boolean
 }
 
 const models = new Map<number, Model>()
@@ -172,6 +174,12 @@ function receive(model: Model, s: SentState | null) {
   const prev = model.sent
   model.sent = s
   if (!s) return
+  if (!model.known) {
+    // what the page says it is, until it moves: a glass in a fixed box stays in place on the screen from the first frame
+    // of the first scroll, which the worker hears of before the state that would show it
+    model.known = true
+    model.anchor = s.fixed ? "screen" : "page"
+  }
   const ox = s.center[0] - s.scroll[0]
   const oy = s.center[1] - s.scroll[1]
   if (prev) {
@@ -205,6 +213,7 @@ scope.onmessage = ({ data: m }) => {
         made: { sent: null, picture: null, cx: 0, cy: 0 },
         overlay: null,
         asked: false,
+        known: false,
       }
       models.set(m.id, model)
       byTarget.set(model.target, model)

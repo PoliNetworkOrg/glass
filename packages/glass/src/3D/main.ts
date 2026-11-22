@@ -1,9 +1,10 @@
+import { useMemo, useSyncExternalStore } from "react"
 import { drawFrames, frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
 import type { Snapshot } from "../utils/snapshot"
 import { forgetPicture, takePicture, tickPictures } from "./pictures"
 import { GlassRenderer, type GlassTarget, type Picture } from "./renderer"
-import { getWorkerRenderer } from "./worker-client"
+import { getWorkerRenderer, subscribeWorkerFailure, workerFailed } from "./worker-client"
 
 // The renderer on the page's thread: it draws on the page's animation frames, at the scroll they read.
 
@@ -58,4 +59,17 @@ export function releaseSnapshot(snapshot: Snapshot) {
   getWorkerRenderer(false)?.release(snapshot)
   snapshot.canvas.width = 0
   snapshot.canvas.height = 0
+}
+
+/**
+ * The renderer of the glass, and whether it is the one in a worker: that one where `worker` asks for it and the browser
+ * can hand it a canvas, until it says it can't draw, then the one on this thread. The worker is asked rather than a
+ * WebGL2 context made here to find out, which would be a second renderer on the page, compiled for nothing.
+ */
+export function useRenderer(worker: boolean): readonly [Renderer | null, boolean] {
+  const failed = useSyncExternalStore(subscribeWorkerFailure, workerFailed, () => false)
+  return useMemo(() => {
+    const off = worker && !failed ? getWorkerRenderer() : null
+    return off ? ([off, true] as const) : ([getRenderer(), false] as const)
+  }, [worker, failed])
 }

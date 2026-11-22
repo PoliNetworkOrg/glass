@@ -2,7 +2,7 @@ import { useReducedMotion } from "motion/react"
 import { useContext, useEffect, useMemo } from "react"
 import { Glass3D } from "./3D"
 import { GlassFallback, type GlassFallbackProps } from "./3D/fallback"
-import { getRenderer } from "./3D/main"
+import { useRenderer } from "./3D/main"
 import { GlassLayerContext, GlassNestContext, useGlass } from "./context"
 import { GlassEdge, GlassShadow, type GlassTheme } from "./edge"
 import type { GlassPreset } from "./presets"
@@ -73,7 +73,8 @@ export function Glass(props: GlassProps) {
   // parsed again only when the options change, not each time the parent renders: a new scene is a new draw
   const optionsKey = JSON.stringify(options)
   const scene = useMemo(() => SceneConfigSchema.parse(JSON.parse(optionsKey)), [optionsKey])
-  const { snapshot, enabled, want, scrollLead } = useGlass()
+  const { snapshot, enabled, want, scrollLead, worker } = useGlass()
+  const [renderer] = useRenderer(worker)
   const nested = useContext(GlassNestContext)
 
   const [outer, corners] = useComputedStyle<HTMLDivElement, { radius: number; exponent: number; shape: string }>(
@@ -102,7 +103,7 @@ export function Glass(props: GlassProps) {
     !disable3D &&
     ((!reducedMotion && !increasedContrast && capable === true) || Boolean(force3D)) &&
     // no WebGL2 (or a shader that did not compile): Glass3D renders the CSS glass itself, so this is the CSS path
-    getRenderer() !== null
+    renderer !== null
   const do3D = wants3D && snapshot
 
   // the page is captured only while some glass is going to draw it

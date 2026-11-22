@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react"
 import { useGlass } from "../context"
 import type { ShapeConfig } from "../types/schemas"
 import { autoLead, frameScroll } from "../utils/frames"
@@ -6,9 +6,8 @@ import { createPredictor } from "../utils/predict"
 import type { Snapshot } from "../utils/snapshot"
 import { profileUniforms } from "./displacement"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
-import { getRenderer } from "./main"
+import { useRenderer } from "./main"
 import { type GlassState, nextKey } from "./renderer"
-import { getWorkerRenderer } from "./worker-client"
 
 export type Glass3DProps = GlassFallbackProps & {
   /** The picture of the page, which is what gets bent */
@@ -32,10 +31,7 @@ export type Glass3DProps = GlassFallbackProps & {
 export function Glass3D(props: Glass3DProps) {
   const { worker } = useGlass()
   // in a worker where it was asked for and the browser can, on this thread otherwise
-  const [renderer, offThread] = useMemo(() => {
-    const off = worker ? getWorkerRenderer() : null
-    return off ? ([off, true] as const) : ([getRenderer(), false] as const)
-  }, [worker])
+  const [renderer, offThread] = useRenderer(worker)
   const canvas = useRef<HTMLCanvasElement>(null)
   const holder = useRef<HTMLDivElement>(null)
 

@@ -39,6 +39,16 @@ type Sent = {
   order: number
   /** The worker asked for the picture of what it has over its glass */
   overlay: boolean
+  /** It is in a box fixed to the screen: null until its element is there to ask */
+  fixed: boolean | null
+}
+
+/** Whether `element` is in a box fixed to the screen, which keeps it in place there while the page scrolls */
+function inFixedBox(element: HTMLElement) {
+  for (let node: Element | null = element; node && node !== document.body; node = node.parentElement) {
+    if (getComputedStyle(node).position === "fixed") return true
+  }
+  return false
 }
 
 class WorkerRenderer implements Renderer {
@@ -61,8 +71,20 @@ class WorkerRenderer implements Renderer {
         const target = this.byId.get(data.id)
         const sent = target && this.glasses.get(target)
         if (sent) sent.overlay = true
-      } else console.warn(`glass: the worker can't draw: ${data.reason}`)
+      } else {
+        console.warn(`glass: the worker can't draw, the glass is drawn on the page: ${data.reason}`)
+        this.fail()
+      }
     }
+  }
+
+  /** Gives up on the worker: the glass is drawn on the page's thread from the next render (see `useRenderer`) */
+  private fail() {
+    this.worker.terminate()
+    this.stop?.()
+    this.stop = null
+    failure.failed = true
+    for (const listener of failure.listeners) listener()
   }
 
   private post(message: ToWorker, transfer: Transferable[] = []) {
@@ -73,7 +95,7 @@ class WorkerRenderer implements Renderer {
     const canvas = target.canvas as HTMLCanvasElement
     const offscreen = canvas.transferControlToOffscreen()
     const id = ++this.ids
-    this.glasses.set(target, { id, key: -1, nulled: false, order: 0, overlay: false })
+    this.glasses.set(target, { id, key: -1, nulled: false, order: 0, overlay: false, fixed: null })
     this.byId.set(id, target)
     this.reorder = true
     this.post({ type: "add", id, canvas: offscreen }, [offscreen])
@@ -167,6 +189,8 @@ class WorkerRenderer implements Renderer {
         continue
       }
       sent.nulled = false
+      // asked once: the worker learns it from how the glass moves too, but only after the page has scrolled
+      if (sent.fixed === null && state.element) sent.fixed = inFixedBox(state.element)
       if (sent.overlay && state.element) {
         takePicture(target, state.element, (canvas) => {
           createImageBitmap(canvas, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" })
@@ -189,6 +213,7 @@ class WorkerRenderer implements Renderer {
           center: state.center,
           scroll: [frameScroll.x, frameScroll.y],
           t,
+          fixed: sent.fixed ?? false,
           lead: state.lead,
           saturate: state.saturate,
           lift: state.lift,
@@ -249,9 +274,21 @@ function feedScroll(sample: (t: number, x: number, y: number) => boolean) {
 }
 
 let client: WorkerRenderer | null | undefined
+/** The worker said it can't draw (no WebGL2 there): known only once it started */
+const failure = { failed: false, listeners: new Set<() => void>() }
+
+export function subscribeWorkerFailure(listener: () => void) {
+  failure.listeners.add(listener)
+  return () => {
+    failure.listeners.delete(listener)
+  }
+}
+
+export const workerFailed = () => failure.failed
 
 /** The renderer in a worker, made the first time it is asked for with `create`: null where the browser can't */
 export function getWorkerRenderer(create = true): Renderer | null {
+  if (failure.failed) return null
   if (client === undefined) {
     if (!create) return null
     try {

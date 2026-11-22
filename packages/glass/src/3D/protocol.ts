@@ -18,6 +18,8 @@ export type SentState = {
   scroll: [number, number]
   /** When it was read */
   t: number
+  /** It is in a box fixed to the screen, so it stays in place there while the page scrolls */
+  fixed: boolean
   lead: number
   saturate: number
   lift: number
