@@ -2,6 +2,7 @@ import { GlassLayer } from "@polinetwork/glass"
 import { Activity } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { FrameLab } from "./frame-lab"
 import { type GlassMode, Segmented, ShowGlass } from "./glass"
 
 type Stats = { fps: number; worst: number; glass: number; drawn: number }
@@ -49,6 +50,8 @@ export function PerfPanel({
   onModeChange,
   layered,
   onLayeredChange,
+  keepalive,
+  onKeepaliveChange,
 }: {
   orbs: OrbCount
   onOrbsChange: (orbs: OrbCount) => void
@@ -56,11 +59,15 @@ export function PerfPanel({
   onModeChange: (mode: GlassMode) => void
   layered: boolean
   onLayeredChange: (layered: boolean) => void
+  keepalive: boolean
+  onKeepaliveChange: (on: boolean) => void
 }) {
   const stats = useStats()
   // collapsed on a phone, where it would cover half the page
   const [open, setOpen] = useState(() => window.innerWidth >= 640)
   const smooth = stats.fps >= 55 && stats.worst < 34
+  // the lab takes the place of the other controls, so the panel still fits on a phone
+  const [lab, setLab] = useState(false)
 
   return (
     <div className="fixed top-20 right-3 z-40 w-[min(19rem,calc(100vw-1.5rem))]">
@@ -94,38 +101,45 @@ export function PerfPanel({
                 <dd className="font-mono tabular-nums">{stats.drawn}</dd>
               </div>
             </dl>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs opacity-60">Moving glass orbs</span>
-              <Segmented
-                options={ORB_COUNTS.map((n) => ({ value: n, label: n }))}
-                value={orbs}
-                onChange={onOrbsChange}
-              />
-            </div>
-            <label className="flex cursor-pointer items-center justify-between gap-2">
-              <span>
-                Orbs over the glass
-                <span className="block text-xs opacity-60">On the top layer, bending all the glass below</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={layered}
-                onChange={(e) => onLayeredChange(e.target.checked)}
-                className="size-4 accent-sky-500"
-              />
-            </label>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs opacity-60">Glass: 3D, as the device check decides, or the CSS fallback</span>
-              <Segmented
-                options={[
-                  { value: "3d", label: "3D" },
-                  { value: "auto", label: "Auto" },
-                  { value: "css", label: "CSS" },
-                ]}
-                value={mode}
-                onChange={onModeChange}
-              />
-            </div>
+            {!lab && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs opacity-60">Moving glass orbs</span>
+                  <Segmented
+                    options={ORB_COUNTS.map((n) => ({ value: n, label: n }))}
+                    value={orbs}
+                    onChange={onOrbsChange}
+                  />
+                </div>
+                <label className="flex cursor-pointer items-center justify-between gap-2">
+                  <span>
+                    Orbs over the glass
+                    <span className="block text-xs opacity-60">On the top layer, bending all the glass below</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={layered}
+                    onChange={(e) => onLayeredChange(e.target.checked)}
+                    className="size-4 accent-sky-500"
+                  />
+                </label>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs opacity-60">
+                    Glass: 3D, as the device check decides, or the CSS fallback
+                  </span>
+                  <Segmented
+                    options={[
+                      { value: "3d", label: "3D" },
+                      { value: "auto", label: "Auto" },
+                      { value: "css", label: "CSS" },
+                    ]}
+                    value={mode}
+                    onChange={onModeChange}
+                  />
+                </div>
+              </>
+            )}
+            <FrameLab on={lab} onChange={setLab} keepalive={keepalive} onKeepaliveChange={onKeepaliveChange} />
           </>
         )}
       </ShowGlass>
