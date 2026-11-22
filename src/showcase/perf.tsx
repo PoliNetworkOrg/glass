@@ -83,13 +83,14 @@ export function PerfPanel({
           className="flex items-center gap-2 text-left font-semibold"
           aria-expanded={open}
         >
-          <Activity className="size-4" />
-          Performance
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-xs font-normal tabular-nums">
+          <Activity className="size-4 shrink-0" />
+          {/* the title gives way to the counters on a narrow phone, which stay on one line */}
+          <span className="min-w-0 truncate">Performance</span>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-xs font-normal whitespace-nowrap tabular-nums">
             <span className={cn("size-2 rounded-full", smooth ? "bg-emerald-500" : "bg-amber-500")} />
             {stats.fps} fps
             {/* the page's frames are held to 60 on iOS, the worker's aren't */}
-            {stats.worker !== null && <span className="opacity-60">· glass {stats.worker}/s</span>}
+            {stats.worker !== null && <span className="opacity-60">· glass {stats.worker}</span>}
           </span>
         </button>
         {open && (
