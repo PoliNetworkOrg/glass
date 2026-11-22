@@ -424,12 +424,13 @@ export function Showcase() {
   const [mode, setMode] = useState<GlassMode>("3d")
   const [layered, setLayered] = useState(true)
   const [orbs, setOrbs] = useState<OrbCount>("0")
+  const [keepalive, setKeepalive] = useState(true)
   const [mood, setMood] = useState<Mood>("All")
   const context = useMemo(() => ({ dark, mode }), [dark, mode])
 
   return (
     <ShowcaseContext.Provider value={context}>
-      <GlassProvider deps={[dark, mood]} scrollLead={scrollLead}>
+      <GlassProvider deps={[dark, mood]} scrollLead={scrollLead} scrollKeepalive={keepalive}>
         <div className={dark ? "dark" : ""}>
           <div className="min-h-screen bg-background text-foreground">
             {/* the fixed parts float over the glass of the page as it scrolls, so they are on a layer above it */}
@@ -456,6 +457,8 @@ export function Showcase() {
                 onModeChange={setMode}
                 layered={layered}
                 onLayeredChange={setLayered}
+                keepalive={keepalive}
+                onKeepaliveChange={setKeepalive}
               />
             </GlassLayer>
             <Orbs count={Number(orbs)} layered={layered} />

@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { GlassContext } from "./context"
+import { setScrollKeepalive } from "./utils/frames"
 import { usePageSnapshot } from "./utils/hooks"
 
 export type GlassProviderProps = {
@@ -19,6 +20,13 @@ export type GlassProviderProps = {
    * shows less. A number sets the lead for every input, and 0 turns it off
    */
   scrollLead?: number
+  /**
+   * Keeps a scroll-driven animation running on the page (of a transparent colour, on an element of a pixel) while the
+   * 3D glass draws, on touch devices. Safari on iOS then tells the page where it is scrolled and where a finger is more
+   * often (in one measure on an iPhone during a flick, from 51 to 72 scroll positions and from 60 to 95 touch moves a second),
+   * which the glass follows the page with. Default: true
+   */
+  scrollKeepalive?: boolean
 }
 
 /**
@@ -38,6 +46,11 @@ export function GlassProvider(props: GlassProviderProps) {
   }, [])
   const snapshot = usePageSnapshot(props.deps, props.blur, enabled && wanted > 0)
   const scrollLead = props.scrollLead
+  const scrollKeepalive = props.scrollKeepalive ?? true
+  useEffect(() => {
+    setScrollKeepalive(scrollKeepalive)
+    return () => setScrollKeepalive(true)
+  }, [scrollKeepalive])
   const value = useMemo(() => ({ snapshot, enabled, want, scrollLead }), [snapshot, enabled, want, scrollLead])
   return <GlassContext.Provider value={value}>{props.children}</GlassContext.Provider>
 }

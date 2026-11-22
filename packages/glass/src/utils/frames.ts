@@ -71,11 +71,56 @@ function tick(time: number) {
   for (const draw of drawers) draw(time)
 }
 
+// Safari on iOS tells the page where it is scrolled and where a finger is less often than the display draws, and a
+// scroll-driven animation running on the page has it tell more. On an iPhone at 120Hz, with Safari's default of page
+// updates near 60 a second, during a flick: from 51 to 72 scroll positions and from 60 to 95 touch moves a second,
+// measured with the Frame lab of the demo running (which loads the page itself; the idea is from
+// https://rida.dev/blog/bypassing-ios-safari-60-fps-limit). The animation is of a colour,
+// which the compositor doesn't animate by itself, between two transparent ones, on an element of a pixel that shows
+// nothing. It is there while the loop runs, and only where the pointer is a finger: that is where it was measured.
+
+const KEEPALIVE_CLASS = "_polinetwork_glass-scroll-keepalive"
+const KEEPALIVE_CSS = `
+@keyframes ${KEEPALIVE_CLASS} { from { background-color: rgb(0 0 0 / 0) } to { background-color: rgb(255 255 255 / 0) } }
+.${KEEPALIVE_CLASS} { position: fixed; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; contain: strict;
+  animation: ${KEEPALIVE_CLASS} linear both; animation-timeline: scroll(root); }
+`
+/** Whether the page wants it, set by the provider (`scrollKeepalive`) */
+let keepaliveWanted = true
+let keepalive: HTMLElement | null = null
+
+function addKeepalive() {
+  if (keepalive || !keepaliveWanted) return
+  coarse ??= matchMedia("(pointer: coarse)").matches
+  if (!coarse || !CSS.supports("animation-timeline: scroll()")) return
+  const element = document.createElement("div")
+  element.className = KEEPALIVE_CLASS
+  element.setAttribute("aria-hidden", "true")
+  const style = document.createElement("style")
+  style.textContent = KEEPALIVE_CSS
+  element.append(style)
+  document.body.append(element)
+  keepalive = element
+}
+
+function removeKeepalive() {
+  keepalive?.remove()
+  keepalive = null
+}
+
+/** Turns the scroll-driven animation that has Safari report the scroll more often on or off (it is on by default) */
+export function setScrollKeepalive(on: boolean) {
+  keepaliveWanted = on
+  if (!on) removeKeepalive()
+  else if (watchers.size > 0 || drawers.size > 0) addKeepalive()
+}
+
 function startLoop() {
   if (!frame) {
     frame = requestAnimationFrame(tick)
     window.addEventListener("touchstart", onTouch, { passive: true, capture: true })
     window.addEventListener("wheel", onWheel, { passive: true, capture: true })
+    addKeepalive()
   }
 }
 
@@ -86,6 +131,7 @@ function stopLoopIfIdle() {
     lastTime = 0
     window.removeEventListener("touchstart", onTouch, { capture: true })
     window.removeEventListener("wheel", onWheel, { capture: true })
+    removeKeepalive()
   }
 }
 
