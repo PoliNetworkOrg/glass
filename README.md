@@ -22,7 +22,8 @@ The glass takes its shape from the element: its `border-radius` (px or `%`) and 
 ## `<GlassProvider>`
 
 Captures the page as the texture all the glass inside it refracts, while a glass inside it is drawn in 3D. It is
-captured again when `deps` or `blur` change, when the page changes size, and when an image or a font finishes loading.
+captured again when `deps` or `blur` change, when the page changes size, when an image or a font finishes loading, and
+when an element becomes an [animated layer](#animated-backgrounds) or stops being one.
 
 | Prop | |
 | --- | --- |
@@ -32,6 +33,8 @@ captured again when `deps` or `blur` change, when the page changes size, and whe
 | `scrollLead` | How far ahead, in ms, the 3D glass draws the page while the page moves under it, to make up for the browser telling the page it scrolled after it did. Unset (the default), it is a frame of the display, measured, while a finger scrolls the page, and `0` while a wheel does: a flick slows down smoothly, which the lead follows, while a wheel stops dead, which it would overshoot. Either way a slow scroll is drawn exactly where the browser says. A number sets the lead for every input; `0` turns it off. |
 
 Elements with a `glass-ignore` attribute, and canvases, are left out of the capture. `<Glass>` sets it on itself.
+Elements with a `glass-layer` attribute are left out of it too, and drawn where they are on every frame: see
+[Animated backgrounds](#animated-backgrounds).
 
 ## `<Glass>`
 
@@ -82,6 +85,39 @@ What a higher layer doesn't see of the glass below: its shadow, its light while 
 with CSS (nested glass, `disable3D`), which it sees through the glass it is in, tinted but not blurred. The demo's
 Showcase puts up to 32 glass orbs moving on layer 1, over 48 glasses on layer 0: Chrome keeps 60fps, 58 while
 scrolling.
+
+## Animated backgrounds
+
+The page is captured once, so what moves on it is shown where it was when the page was captured. For what moves behind
+the glass all the time (blobs drifting in the background, a shape that spins) mark the element that moves with
+`glass-layer`:
+
+```tsx
+<div className="fixed inset-0 -z-10" style={{ filter: "blur(70px)" }}>
+  <div glass-layer="" className="blob" style={{ animation: "drift 14s ease-in-out infinite" }} />
+  <div glass-layer="" className="blob" style={{ animation: "spin 20s linear infinite" }} />
+</div>
+```
+
+A layer is left out of the picture of the page and gets a picture of its own. On every frame the glass reads where the
+layer is, its transform (`transform`, `translate`, `rotate`, `scale`) and its opacity, and draws its picture there,
+behind the glass it is under. That covers what an animation the compositor runs moves, from CSS or from JavaScript
+(Motion, GSAP): the glass follows it at the frame rate of the page.
+
+- **What is in front stays in front.** Where layers are on the page, the capture also takes the page without the
+  backgrounds under them (of their ancestors, `<html>` and `<body>` among them), and the glass is drawn from what is
+  under the layers, the layers, and what is in front of them. Text over a blob stays over it.
+- **Filters are folded in.** The filters of a layer and of its ancestors (`blur()` in particular) are put on its
+  picture, with room around it for the blur to spread, so blobs blurred together in a box are drawn blurred though
+  each moves on its own.
+- **What it costs.** A glass that no layer is under bends the page picture as before and costs nothing more. One that
+  a moving layer is under is drawn again on every frame: its backdrop, its blur and the glass, on the GPU.
+- **Limits.** Mark the element that moves, not a box around it. Only its transform and its opacity are followed: its
+  picture is taken without its animations, and again only when it changes (its content, its attributes, its size), so
+  an animated colour or gradient stays as it is at rest, and a change of size is caught a frame or two late. Transforms of its ancestors are
+  followed where they move it, not where they turn or scale it. What is painted before a layer and isn't an ancestor of
+  it (a sibling with a background, below it in `z-index`) is drawn in front of it. A layer is blended normally
+  (`mix-blend-mode` is left out). The CSS glass needs none of this: it blurs the live page.
 
 ## Presets
 
@@ -201,4 +237,5 @@ The passes and caches behind these are described in [docs/ARCHITECTURE.md](docs/
   glass follows the bounce. To turn the bounce off: `html { overscroll-behavior: none; }`.
 - `corner-shape` isn't supported everywhere yet, where it isn't the corners are round.
 - The 3D glass shows the page as it was captured, so what changes under it (a video, an animation, a hover) isn't
-  reflected until the next capture. Canvases, videos, iframes and the scroll of inner scrollers aren't in the capture.
+  reflected until the next capture, except for [animated layers](#animated-backgrounds). Canvases, videos, iframes
+  and the scroll of inner scrollers aren't in the capture.

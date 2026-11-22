@@ -15,16 +15,22 @@ import { OVERLAY_MARGIN } from "./renderer"
 const CAPTURE_SPEED = 0.5
 const CALM = 100
 
+/** A picture as it is taken: the canvas, whether it is fresh (see `Snapshot`), and what else the capture says of it */
+type Taken = { canvas: HTMLCanvasElement; fresh: boolean }
+
 type Watch = {
   element: HTMLElement
   /** It changed since its picture was taken, or none was */
   stale: boolean
   capturing: boolean
-  deliver: (canvas: HTMLCanvasElement) => void
+  // biome-ignore lint/suspicious/noExplicitAny: each watch keeps the capture and the delivery of its own kind
+  deliver: (taken: any) => void
+  capture: (element: HTMLElement) => Promise<Taken>
   disconnect: () => void
 }
 
 const watches = new Map<object, Watch>()
+const elementPicture = (element: HTMLElement) => snapshotElement(element, OVERLAY_MARGIN)
 /** One picture is taken at a time */
 let busy = false
 let now = 0
@@ -39,10 +45,16 @@ export function tickPictures(time: number) {
 
 /**
  * Watches `element` for `key`, the first time it is called for it, and takes its picture now if it changed since the
- * last one (or there was none) and the page is calm: `deliver` gets each picture. The press of a glass moves and lights
+ * last one (or there was none) and the page is calm: `deliver` gets each picture, taken by `capture` (the picture of
+ * what a glass has over its glass, by default). The press of a glass moves and lights
  * its element through its own style, and its canvas is redrawn on every frame, so neither counts as a change.
  */
-export function takePicture(key: object, element: HTMLElement, deliver: (canvas: HTMLCanvasElement) => void) {
+export function takePicture<T extends Taken = Taken>(
+  key: object,
+  element: HTMLElement,
+  deliver: (taken: T) => void,
+  capture: (element: HTMLElement) => Promise<T> = elementPicture as (element: HTMLElement) => Promise<T>
+) {
   let watch = watches.get(key)
   if (!watch) {
     if (!mediaWatched) {
@@ -52,7 +64,7 @@ export function takePicture(key: object, element: HTMLElement, deliver: (canvas:
         for (const w of watches.values()) w.stale = true
       })
     }
-    const created: Watch = { element, stale: true, capturing: false, deliver, disconnect: () => {} }
+    const created: Watch = { element, stale: true, capturing: false, deliver, capture, disconnect: () => {} }
     const mutations = new MutationObserver((records) => {
       const own = (r: MutationRecord) =>
         r.type === "attributes" && (r.target === element || r.target instanceof HTMLCanvasElement)
@@ -80,12 +92,12 @@ export function takePicture(key: object, element: HTMLElement, deliver: (canvas:
   w.capturing = true
   w.stale = false
   busy = true
-  snapshotElement(w.element, OVERLAY_MARGIN)
-    .then(({ canvas, fresh }) => {
+  w.capture(w.element)
+    .then((taken) => {
       if (watches.get(key) !== w) return
-      w.deliver(canvas)
+      w.deliver(taken)
       // taken again a moment later, in case WebKit drew it before decoding the images that are new in it
-      if (fresh) {
+      if (taken.fresh) {
         setTimeout(() => {
           w.stale = true
         }, 400)

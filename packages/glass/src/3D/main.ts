@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore } from "react"
 import { drawFrames, frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
 import type { Snapshot } from "../utils/snapshot"
+import { liveLayers, watchLayers } from "./layers"
 import { forgetPicture, takePicture, tickPictures } from "./pictures"
 import { GlassRenderer, type GlassTarget, type Picture } from "./renderer"
 import { getWorkerRenderer, subscribeWorkerFailure, workerFailed } from "./worker-client"
@@ -29,13 +30,22 @@ export function getRenderer(): Renderer | null {
         typeof document === "undefined"
           ? null
           : new GlassRenderer({
-              frames: drawFrames,
+              // the layers are read in the read phase of the same frames, before they are drawn
+              frames: (draw) => {
+                const stopLayers = watchLayers()
+                const stopDrawing = drawFrames(draw)
+                return () => {
+                  stopDrawing()
+                  stopLayers()
+                }
+              },
+              layers: () => liveLayers,
               tick: tickPictures,
               scroll: (time, lead) => scroll(time, frameScroll.x, frameScroll.y, lead),
               overlay: (target, state, overlay) => {
                 if (!state.element) return
                 overlay.dispose = () => forgetPicture(target)
-                takePicture(target, state.element, (canvas) => {
+                takePicture(target, state.element, ({ canvas }) => {
                   overlay.canvas = canvas
                   overlay.uploaded = false
                   overlay.version++
@@ -59,6 +69,10 @@ export function releaseSnapshot(snapshot: Snapshot) {
   getWorkerRenderer(false)?.release(snapshot)
   snapshot.canvas.width = 0
   snapshot.canvas.height = 0
+  if (snapshot.over) {
+    snapshot.over.width = 0
+    snapshot.over.height = 0
+  }
 }
 
 /**

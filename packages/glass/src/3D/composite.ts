@@ -3,6 +3,9 @@ import { EDGE, SRGB } from "./displacement"
 // What is behind a higher layer of glass: the page, and the glass of the layers below it as it is on the screen. It is
 // drawn in screen space, over the region the glass of the layer covers (and as far around it as its frost reaches),
 // in sRGB values blended the way the browser blends them, which the glass of the layer then reads back.
+//
+// The same is drawn behind any glass an animated layer of the page (`glass-layer`) is under, on every frame it moves:
+// what is under the layers, the layers where they are, then what is in front of them.
 
 /** The page, where it is on the screen: a rectangle over the whole region */
 export const PAGE_VERTEX = /* glsl */ `#version 300 es
@@ -15,6 +18,10 @@ export const PAGE_VERTEX = /* glsl */ `#version 300 es
 export const PAGE_FRAGMENT = /* glsl */ `#version 300 es
   precision highp float;
   uniform highp sampler2D uPage;
+  /** What the page has in front of its animated layers, on nothing, not premultiplied (see \`over\` of the snapshot) */
+  uniform highp sampler2D uOver;
+  /** 0: the page. 1: what is under its layers, worked out from the two. 2: what is in front of them, premultiplied */
+  uniform int uMode;
   uniform vec2 uPageSize;
   /** The region on the screen, in px: x, y (from the top left) and its width and height */
   uniform vec4 uRegion;
@@ -28,7 +35,61 @@ ${SRGB}
     vec2 page = screen + uScroll;
     // the picture of the page is flipped, its first row is the bottom of the page
     vec2 uv = vec2(page.x / uPageSize.x, 1.0 - page.y / uPageSize.y);
-    fragColor = vec4(encodeSRGB(texture(uPage, uv).rgb), 1.0);
+    if (uMode == 0) {
+      fragColor = vec4(encodeSRGB(texture(uPage, uv).rgb), 1.0);
+      return;
+    }
+    // A pixel each of the two, the same one, not a blend of the pixels around it: what is under the layers is worked
+    // out from both, which a blend at the edges of what is in front (text) would throw off.
+    ivec2 size = textureSize(uPage, 0);
+    ivec2 texel = clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1);
+    vec4 over = texelFetch(uOver, texel, 0);
+    vec3 front = encodeSRGB(over.rgb) * over.a;
+    if (uMode == 2) {
+      fragColor = vec4(front, over.a);
+      return;
+    }
+    // The page is what is in front over what is under, blended as the browser blends, in sRGB values: so what is
+    // under is what is left of the page once that is taken out. Where what is in front covers it, it doesn't matter.
+    vec3 base = encodeSRGB(texelFetch(uPage, texel, 0).rgb);
+    vec3 under = over.a < 0.995 ? clamp((base - front) / (1.0 - over.a), 0.0, 1.0) : base;
+    fragColor = vec4(under, 1.0);
+  }
+`
+
+/**
+ * An animated layer of the page (\`glass-layer\`), where it is drawn on this frame: its picture, as big as its box and
+ * the margin around it, through the linear part of its transform, around the center of its box
+ */
+export const LAYER_VERTEX = /* glsl */ `#version 300 es
+  in vec2 aPos;
+  /** The center of its box on the screen, y down, its transform included */
+  uniform vec2 uCenter;
+  /** Half the size of its picture, in px */
+  uniform vec2 uHalf;
+  /** Its transform without the move: x' = a x + c y, y' = b x + d y, y down */
+  uniform vec4 uMatrix;
+  uniform vec4 uRegion;
+  out vec2 vUv;
+  void main() {
+    vec2 local = vec2(aPos.x, -aPos.y) * uHalf;
+    vec2 screen = uCenter + vec2(uMatrix.x * local.x + uMatrix.z * local.y, uMatrix.y * local.x + uMatrix.w * local.y);
+    vec2 region = vec2(screen.x - uRegion.x, uRegion.y + uRegion.w - screen.y);
+    gl_Position = vec4(region / uRegion.zw * 2.0 - 1.0, 0.0, 1.0);
+    // the picture is flipped: its top row is at the top of the texture
+    vUv = aPos * 0.5 + 0.5;
+  }
+`
+
+export const LAYER_FRAGMENT = /* glsl */ `#version 300 es
+  precision highp float;
+  /** Premultiplied, in sRGB values */
+  uniform highp sampler2D uPicture;
+  uniform float uOpacity;
+  in vec2 vUv;
+  out vec4 fragColor;
+  void main() {
+    fragColor = texture(uPicture, vUv) * uOpacity;
   }
 `
 

@@ -1,6 +1,15 @@
 import { createStreamPredictor } from "../utils/predict"
 import type { FromWorker, SentState, ToWorker } from "./protocol"
-import { GlassRenderer, type GlassState, type GlassTarget, nextKey, type Overlay, type Picture } from "./renderer"
+import {
+  GlassRenderer,
+  type GlassState,
+  type GlassTarget,
+  type LiveLayer,
+  type LiveLayers,
+  nextKey,
+  type Overlay,
+  type Picture,
+} from "./renderer"
 
 // The renderer in a worker. Safari on iOS draws the page's animation frames 60 times a second by default, on a display
 // that draws 120 while a finger moves the page, so the glass that stays in place on the screen (a header, a tab bar)
@@ -29,6 +38,9 @@ const clock = () => performance.timeOrigin + performance.now()
 
 const scroll = createStreamPredictor()
 const pictures = new Map<number, Picture>()
+/** The animated layers of the page, as the page last read them */
+const layers: LiveLayers = { list: [], set: 0 }
+const layerById = new Map<number, LiveLayer>()
 
 type Model = {
   id: number
@@ -107,6 +119,7 @@ try {
       }
     },
     scroll: (time, lead) => scroll.at(time, lead),
+    layers: () => layers,
     overlay: (target, _state, overlay) => {
       const model = byTarget.get(target)
       if (!model) return
@@ -259,7 +272,7 @@ scope.onmessage = ({ data: m }) => {
       phase = m.t % PERIOD
       break
     case "snapshot":
-      pictures.set(m.id, { canvas: m.bitmap, width: m.width, height: m.height })
+      pictures.set(m.id, { canvas: m.bitmap, over: m.over, width: m.width, height: m.height })
       wake(100)
       break
     case "release": {
@@ -268,6 +281,53 @@ scope.onmessage = ({ data: m }) => {
       pictures.delete(m.id)
       renderer?.release(picture)
       if (picture.canvas instanceof ImageBitmap) picture.canvas.close()
+      if (picture.over instanceof ImageBitmap) picture.over.close()
+      break
+    }
+    case "layers": {
+      let same = m.layers.length === layers.list.length
+      m.layers.forEach((sent, i) => {
+        let layer = layerById.get(sent.id)
+        if (!layer) {
+          layer = { ...sent, picture: null, margin: 0, pictureVersion: 0 }
+          layerById.set(sent.id, layer)
+        } else {
+          layer.version = sent.version
+          layer.width = sent.width
+          layer.height = sent.height
+          layer.center = sent.center
+          layer.fixed = sent.fixed
+          layer.matrix = sent.matrix
+          layer.opacity = sent.opacity
+          layer.visible = sent.visible
+        }
+        if (layers.list[i] !== layer) same = false
+      })
+      if (!same) {
+        const kept = new Set(m.layers.map((sent) => sent.id))
+        for (const [id, layer] of layerById) {
+          if (kept.has(id)) continue
+          layerById.delete(id)
+          if (layer.picture instanceof ImageBitmap) layer.picture.close()
+        }
+        layers.list = m.layers.map((sent) => layerById.get(sent.id) as LiveLayer)
+        layers.set++
+      }
+      wake()
+      break
+    }
+    case "layer-picture": {
+      const layer = layerById.get(m.id)
+      if (!layer) {
+        m.bitmap.close()
+        return
+      }
+      if (layer.picture instanceof ImageBitmap) layer.picture.close()
+      layer.picture = m.bitmap
+      layer.margin = m.margin
+      layer.pictureVersion++
+      layer.version++
+      wake(100)
       break
     }
     case "overlay": {

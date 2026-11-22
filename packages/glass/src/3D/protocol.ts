@@ -26,6 +26,19 @@ export type SentState = {
   uniforms: GlassUniforms
 }
 
+/** An animated layer of the page as the page read it, all of `LiveLayer` but its picture, which is sent on its own */
+export type SentLayer = {
+  id: number
+  version: number
+  width: number
+  height: number
+  center: [number, number]
+  fixed: boolean
+  matrix: [number, number, number, number]
+  opacity: number
+  visible: boolean
+}
+
 export type ToWorker =
   /** A glass, and the canvas it is shown on, handed over */
   | { type: "add"; id: number; canvas: OffscreenCanvas }
@@ -36,11 +49,18 @@ export type ToWorker =
   | { type: "scroll"; t: number; x: number; y: number }
   /** When a frame of the page started: the display draws on the 120ths of a second from there */
   | { type: "vsync"; t: number }
-  /** A picture of the page, flipped for the GPU, of a page `width` x `height` */
-  | { type: "snapshot"; id: number; bitmap: ImageBitmap; width: number; height: number }
+  /**
+   * A picture of the page, flipped for the GPU, of a page `width` x `height`, and what it has in front of its animated
+   * layers where it has some (see `over` of the snapshot)
+   */
+  | { type: "snapshot"; id: number; bitmap: ImageBitmap; over: ImageBitmap | null; width: number; height: number }
   | { type: "release"; id: number }
   /** The picture of what glass `id` has over its glass, flipped and premultiplied */
   | { type: "overlay"; id: number; bitmap: ImageBitmap }
+  /** The animated layers of the page, all of them, in the order of the document: when which they are or one changed */
+  | { type: "layers"; layers: SentLayer[] }
+  /** The picture of layer `id`, flipped and premultiplied, `margin` px bigger than its box on each side */
+  | { type: "layer-picture"; id: number; bitmap: ImageBitmap; margin: number }
 
 export type FromWorker =
   /** Glass `id` is under a higher layer: send the picture of what it has over its glass, and again when it changes */
