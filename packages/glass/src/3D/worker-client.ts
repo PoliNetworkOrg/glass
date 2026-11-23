@@ -108,6 +108,7 @@ class WorkerRenderer implements Renderer {
 
   /** Gives up on the worker: the glass is drawn on the page's thread from the next render (see `useRenderer`) */
   private fail() {
+    if (failure.failed) return
     this.worker.terminate()
     this.stop?.()
     this.stop = null
@@ -201,7 +202,13 @@ class WorkerRenderer implements Renderer {
       .catch(() => {
         // the canvas was freed first, and a newer picture takes its place; or it couldn't be taken (out of memory, on
         // iOS), and the worker, which has the id already, waits for it: taken again, not on every frame
-        if (this.pictureIds.get(snapshot) !== id || tries + 1 >= PICTURE_TRIES) return
+        if (this.pictureIds.get(snapshot) !== id) return
+        if (tries + 1 >= PICTURE_TRIES) {
+          // the page's thread draws from the canvas itself, without this copy of it the worker needs
+          console.warn("glass: a picture of the page couldn't be sent to the worker, the glass is drawn on the page")
+          this.fail()
+          return
+        }
         setTimeout(() => {
           if (this.pictureIds.get(snapshot) === id) this.sendPicture(snapshot, id, tries + 1)
         }, PICTURE_RETRY)
