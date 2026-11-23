@@ -28,10 +28,11 @@ export type GlassProviderProps = {
    */
   scrollKeepalive?: boolean
   /**
-   * Experimental: draws the 3D glass in a worker, on every 120th of a second while the page moves, where the browser
+   * Draws the 3D glass in a worker, on every 120th of a second while the page moves, where the browser
    * can hand a canvas to a worker. Safari on iOS draws the page's frames 60 times a second, by default, on a display
    * that draws 120 while a finger scrolls, so glass that stays in place on the screen moves over the page every other
-   * frame there; a canvas drawn in a worker is shown without waiting for the page's frames. Default: false
+   * frame there; a canvas drawn in a worker is shown without waiting for the page's frames. Where the browser can't, the
+   * glass is drawn on the page. Default: true
    */
   worker?: boolean
 }
@@ -58,7 +59,7 @@ export function GlassProvider(props: GlassProviderProps) {
     setScrollKeepalive(scrollKeepalive)
     return () => setScrollKeepalive(true)
   }, [scrollKeepalive])
-  const worker = props.worker ?? false
+  const worker = props.worker ?? true
   const value = useMemo(
     () => ({ snapshot, enabled, want, scrollLead, worker }),
     [snapshot, enabled, want, scrollLead, worker]
