@@ -13,6 +13,8 @@ type GlassContextType = {
   want: () => () => void
   /** How far ahead, in ms, the glass draws the page while it moves under it, see the provider's prop. Unset: a frame for touch */
   scrollLead: number | undefined
+  /** Whether the 3D glass is drawn in a worker, see the provider's prop */
+  worker: boolean
 }
 
 export const GlassContext = createContext<GlassContextType>({
@@ -20,6 +22,7 @@ export const GlassContext = createContext<GlassContextType>({
   enabled: true,
   want: () => () => {},
   scrollLead: undefined,
+  worker: true,
 })
 
 export function useGlass() {

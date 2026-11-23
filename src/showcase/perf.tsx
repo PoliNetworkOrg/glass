@@ -1,14 +1,16 @@
-import { GlassLayer } from "@polinetwork/glass"
+import { GlassLayer, getWorkerDrawRate } from "@polinetwork/glass"
 import { Activity } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { FrameLab } from "./frame-lab"
 import { type GlassMode, Segmented, ShowGlass } from "./glass"
 
-type Stats = { fps: number; worst: number; glass: number; drawn: number }
+/** `worker` is how many frames a second the worker drew the glass, null when it isn't drawn in one */
+type Stats = { fps: number; worst: number; glass: number; drawn: number; worker: number | null }
 
 /** Frames per second and the slowest frame over the last half second, and how much glass there is and is drawn in 3D */
 function useStats() {
-  const [stats, setStats] = useState<Stats>({ fps: 0, worst: 0, glass: 0, drawn: 0 })
+  const [stats, setStats] = useState<Stats>({ fps: 0, worst: 0, glass: 0, drawn: 0, worker: null })
   useEffect(() => {
     let frame = 0
     let frames = 0
@@ -24,7 +26,11 @@ function useStats() {
           fps: Math.round((frames * 1000) / (now - start)),
           worst: Math.round(worst),
           glass: document.querySelectorAll("._polinetwork_glass-content").length,
-          drawn: document.querySelectorAll("._polinetwork_glass-content > canvas").length,
+          // on its own, or in a holder where a worker draws it
+          drawn: document.querySelectorAll(
+            "._polinetwork_glass-content > canvas, ._polinetwork_glass-content > div > canvas"
+          ).length,
+          worker: getWorkerDrawRate(),
         })
         frames = 0
         worst = 0
@@ -49,6 +55,8 @@ export function PerfPanel({
   onModeChange,
   layered,
   onLayeredChange,
+  keepalive,
+  onKeepaliveChange,
 }: {
   orbs: OrbCount
   onOrbsChange: (orbs: OrbCount) => void
@@ -56,11 +64,15 @@ export function PerfPanel({
   onModeChange: (mode: GlassMode) => void
   layered: boolean
   onLayeredChange: (layered: boolean) => void
+  keepalive: boolean
+  onKeepaliveChange: (on: boolean) => void
 }) {
   const stats = useStats()
   // collapsed on a phone, where it would cover half the page
   const [open, setOpen] = useState(() => window.innerWidth >= 640)
   const smooth = stats.fps >= 55 && stats.worst < 34
+  // the lab takes the place of the other controls, so the panel still fits on a phone
+  const [lab, setLab] = useState(false)
 
   return (
     <div className="fixed top-20 right-3 z-40 w-[min(19rem,calc(100vw-1.5rem))]">
@@ -71,11 +83,14 @@ export function PerfPanel({
           className="flex items-center gap-2 text-left font-semibold"
           aria-expanded={open}
         >
-          <Activity className="size-4" />
-          Performance
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-xs font-normal tabular-nums">
+          <Activity className="size-4 shrink-0" />
+          {/* the title gives way to the counters on a narrow phone, which stay on one line */}
+          <span className="min-w-0 truncate">Performance</span>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-xs font-normal whitespace-nowrap tabular-nums">
             <span className={cn("size-2 rounded-full", smooth ? "bg-emerald-500" : "bg-amber-500")} />
             {stats.fps} fps
+            {/* the page's frames are held to 60 on iOS, the worker's aren't */}
+            {stats.worker !== null && <span className="opacity-60">· glass {stats.worker}</span>}
           </span>
         </button>
         {open && (
@@ -94,38 +109,45 @@ export function PerfPanel({
                 <dd className="font-mono tabular-nums">{stats.drawn}</dd>
               </div>
             </dl>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs opacity-60">Moving glass orbs</span>
-              <Segmented
-                options={ORB_COUNTS.map((n) => ({ value: n, label: n }))}
-                value={orbs}
-                onChange={onOrbsChange}
-              />
-            </div>
-            <label className="flex cursor-pointer items-center justify-between gap-2">
-              <span>
-                Orbs over the glass
-                <span className="block text-xs opacity-60">On the top layer, bending all the glass below</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={layered}
-                onChange={(e) => onLayeredChange(e.target.checked)}
-                className="size-4 accent-sky-500"
-              />
-            </label>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs opacity-60">Glass: 3D, as the device check decides, or the CSS fallback</span>
-              <Segmented
-                options={[
-                  { value: "3d", label: "3D" },
-                  { value: "auto", label: "Auto" },
-                  { value: "css", label: "CSS" },
-                ]}
-                value={mode}
-                onChange={onModeChange}
-              />
-            </div>
+            {!lab && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs opacity-60">Moving glass orbs</span>
+                  <Segmented
+                    options={ORB_COUNTS.map((n) => ({ value: n, label: n }))}
+                    value={orbs}
+                    onChange={onOrbsChange}
+                  />
+                </div>
+                <label className="flex cursor-pointer items-center justify-between gap-2">
+                  <span>
+                    Orbs over the glass
+                    <span className="block text-xs opacity-60">On the top layer, bending all the glass below</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={layered}
+                    onChange={(e) => onLayeredChange(e.target.checked)}
+                    className="size-4 accent-sky-500"
+                  />
+                </label>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs opacity-60">
+                    Glass: 3D, as the device check decides, or the CSS fallback
+                  </span>
+                  <Segmented
+                    options={[
+                      { value: "3d", label: "3D" },
+                      { value: "auto", label: "Auto" },
+                      { value: "css", label: "CSS" },
+                    ]}
+                    value={mode}
+                    onChange={onModeChange}
+                  />
+                </div>
+              </>
+            )}
+            <FrameLab on={lab} onChange={setLab} keepalive={keepalive} onKeepaliveChange={onKeepaliveChange} />
           </>
         )}
       </ShowGlass>

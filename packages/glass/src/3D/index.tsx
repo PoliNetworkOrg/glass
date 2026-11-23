@@ -1,11 +1,13 @@
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react"
+import { useGlass } from "../context"
 import type { ShapeConfig } from "../types/schemas"
 import { autoLead, frameScroll } from "../utils/frames"
 import { createPredictor } from "../utils/predict"
 import type { Snapshot } from "../utils/snapshot"
 import { profileUniforms } from "./displacement"
 import { GlassFallback, type GlassFallbackProps } from "./fallback"
-import { type GlassState, getRenderer, nextKey } from "./renderer"
+import { useRenderer } from "./main"
+import { type GlassState, nextKey } from "./renderer"
 
 export type Glass3DProps = GlassFallbackProps & {
   /** The picture of the page, which is what gets bent */
@@ -27,8 +29,11 @@ export type Glass3DProps = GlassFallbackProps & {
  * Where the device has no WebGL2 it is the CSS glass.
  */
 export function Glass3D(props: Glass3DProps) {
-  const renderer = useMemo(getRenderer, [])
+  const { worker } = useGlass()
+  // in a worker where it was asked for and the browser can, on this thread otherwise
+  const [renderer, offThread] = useRenderer(worker)
   const canvas = useRef<HTMLCanvasElement>(null)
+  const holder = useRef<HTMLDivElement>(null)
 
   // Read on every frame, outside of React. It is handed over as soon as it is committed, before the provider frees the
   // picture it replaces (in an effect, after this one)
@@ -38,8 +43,16 @@ export function Glass3D(props: Glass3DProps) {
   })
 
   useEffect(() => {
-    const el = canvas.current
+    // A canvas handed to a worker can't be handed again, and React runs this twice in development: there it is a new
+    // canvas each time, in a holder
+    let el = canvas.current
+    if (offThread && holder.current) {
+      el = document.createElement("canvas")
+      el.style.cssText = "display: block; width: 100%; height: 100%; border-radius: inherit;"
+      holder.current.append(el)
+    }
     if (!renderer || !el) return
+    const created = offThread ? el : null
     const predict = createPredictor()
     // The state of the last frame, and what it was made of. While that is the same, so is the state, and the same object
     // is handed back: this runs for every glass on every frame, and a new state with its key and its uniforms each time
@@ -64,7 +77,7 @@ export function Glass3D(props: Glass3DProps) {
     }
     /** The shape as JSON: a new object with the same values (a render of the glass) is the same shape */
     let shapeJson = ""
-    return renderer.add({
+    const remove = renderer.add({
       canvas: el,
       frame: (time) => {
         const p = current.current
@@ -75,7 +88,8 @@ export function Glass3D(props: Glass3DProps) {
         // Where the center of the glass is on the page, and where it will be when this frame is on screen. It is what
         // moves with the scroll for a glass that stays in place on the screen, and what doesn't for one that scrolls
         // with the page, which is drawn in place by the browser itself.
-        const [cx, cy] = predict(time, frameScroll.x + left + w / 2, frameScroll.y + top + h / 2, lead)
+        // In a worker it is sent where it is as read: the worker draws it ahead itself, on its own frames.
+        const [cx, cy] = predict(time, frameScroll.x + left + w / 2, frameScroll.y + top + h / 2, offThread ? 0 : lead)
         const { shape, surface, tint } = p.scene
         const layer = p.layer ?? 0
         const exponent = p.cornerExponent ?? 2
@@ -128,6 +142,7 @@ export function Glass3D(props: Glass3DProps) {
           snapshot: p.snapshot,
           layer,
           element,
+          order: 0,
           width: Math.floor(layoutWidth),
           height: Math.floor(layoutHeight),
           drawn: [w, h],
@@ -151,24 +166,24 @@ export function Glass3D(props: Glass3DProps) {
         return state
       },
     })
-  }, [renderer])
+    return () => {
+      remove()
+      created?.remove()
+    }
+  }, [renderer, offThread])
 
   if (!renderer) return <GlassFallback {...props} />
 
-  return (
-    <canvas
-      ref={canvas}
-      style={{
-        display: "block",
-        width: "100%",
-        height: "100%",
-        margin: "auto",
-        borderRadius: 5,
-        zIndex: -1,
-        // nothing in it is interactive
-        pointerEvents: "none",
-        boxShadow: "0 0 8px rgba(0, 0, 0, 0.1)",
-      }}
-    />
-  )
+  const style: React.CSSProperties = {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    margin: "auto",
+    borderRadius: 5,
+    zIndex: -1,
+    // nothing in it is interactive
+    pointerEvents: "none",
+    boxShadow: "0 0 8px rgba(0, 0, 0, 0.1)",
+  }
+  return offThread ? <div ref={holder} style={style} /> : <canvas ref={canvas} style={style} />
 }

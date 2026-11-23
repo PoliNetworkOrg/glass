@@ -156,3 +156,72 @@ export function createPredictor() {
     return result(x + vx * k * fade, y + vy * k * fade)
   }
 }
+
+/**
+ * A predictor for a point whose positions come when they come, and not once a frame: the scroll as the page sends it to
+ * a worker, which draws at its own rate. `push` gives it a position, at the time it was read; `at` says where the point
+ * will be `lead` ms after `time`, ahead of the last position by the time since it and the lead, at the speed of the last
+ * {@link WINDOW} ms. The pair `at` returns is the same array every time: read it at once.
+ *
+ * The same rules as {@link createPredictor}: nothing ahead while slow, a jump starts over, and what is ahead fades from
+ * {@link QUIET} ms without a new position to nothing at {@link STILL}. Positions here come every 10 to 20ms while the
+ * page moves, so a frame without one is the gap between two and not a sign of a stop.
+ */
+export function createStreamPredictor() {
+  const ts: number[] = []
+  const xs: number[] = []
+  const ys: number[] = []
+  const last = { t: 0, x: 0, y: 0 }
+  const out: [number, number] = [0, 0]
+  const result = (x: number, y: number) => {
+    out[0] = x
+    out[1] = y
+    return out
+  }
+
+  return {
+    push(t: number, x: number, y: number) {
+      if (last.t > 0 && x === last.x && y === last.y) return
+      const dt = Math.max(1, t - last.t)
+      const jump = last.t > 0 && Math.hypot(x - last.x, y - last.y) / dt > MAX_SPEED
+      // a jump starts over, and so does a start after a stop, from the last still position
+      if (jump) ts.length = xs.length = ys.length = 0
+      else if (last.t > 0 && t - last.t >= STILL && ts.length > 1) {
+        const keep = ts.length - 1
+        ts.copyWithin(0, keep)
+        xs.copyWithin(0, keep)
+        ys.copyWithin(0, keep)
+        ts.length = xs.length = ys.length = 1
+      }
+      last.t = t
+      last.x = x
+      last.y = y
+      ts.push(t)
+      xs.push(x)
+      ys.push(y)
+      let old = 0
+      while (old < ts.length && ts[old] < t - WINDOW) old++
+      if (old > 0) {
+        ts.copyWithin(0, old)
+        xs.copyWithin(0, old)
+        ys.copyWithin(0, old)
+        ts.length -= old
+        xs.length -= old
+        ys.length -= old
+      }
+    },
+    /** Whether a position came in the last `ms` */
+    movedWithin(time: number, ms: number) {
+      return last.t > 0 && time - last.t < ms
+    },
+    at(time: number, lead: number): [number, number] {
+      const since = time - last.t
+      if (lead < 0 || since >= STILL || ts.length < 2) return result(last.x, last.y)
+      const vx = fit(ts, xs)
+      const vy = fit(ts, ys)
+      const k = (Math.max(0, since) + lead) * ramp(Math.hypot(vx, vy))
+      const fade = since < QUIET ? 1 : Math.max(0, 1 - (since - QUIET) / (STILL - QUIET))
+      return result(last.x + vx * k * fade, last.y + vy * k * fade)
+    },
+  }
+}
