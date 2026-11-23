@@ -28,7 +28,17 @@ export type Snapshot = {
    * page that is loading can fail: a picture like this one is worth taking again a moment later.
    */
   fresh: boolean
+  /**
+   * Where the page has animated layers (`glass-layer`): the same page with the backgrounds under them taken out (of
+   * their ancestors, <html> and <body> among them), on a transparent background. It is what the page has in front of
+   * its layers. The renderer works out what is behind them from it and `canvas`, so where a layer moves it can draw
+   * the page, then the layer, then this over it. Null where the page has no layer.
+   */
+  over: HTMLCanvasElement | null
 }
+
+/** Marks an element that moves on its own (an animation) as a layer: see `snapshotLayer` and `3D/layers.ts` */
+export const LAYER_ATTRIBUTE = "glass-layer"
 
 /** url to its data url, fetched once */
 const inlined = new Map<string, Promise<string | null>>()
@@ -371,10 +381,23 @@ async function pageCss(ignore = true) {
   const fontsKey = [...fonts].sort().join(",")
   const sheets = [...document.styleSheets, ...document.adoptedStyleSheets]
   const parts = await Promise.all(sheets.map((sheet) => prepare(sheet, fonts, fontsKey)))
-  // the glass doesn't see itself, nor anything marked to be left out, but they keep their place in the layout
-  if (ignore) parts.push("[glass-ignore], [glass-ignore] * { visibility: hidden !important; }")
+  // The glass doesn't see itself, nor anything marked to be left out, but they keep their place in the layout. The
+  // layers are left out too: the renderer draws them where they are on each frame, from pictures of their own.
+  if (ignore) {
+    parts.push(
+      `[glass-ignore], [glass-ignore] *, [${LAYER_ATTRIBUTE}], [${LAYER_ATTRIBUTE}] * { visibility: hidden !important; }`
+    )
+  }
   return parts.join("\n")
 }
+
+/** Stands in the CSS of the picture of the page for the rule that takes out what is under the layers */
+const OVER_MARK = "/*glass-over*/"
+/**
+ * What is under a layer: the backgrounds of its ancestors, which are painted before it. Anything else that is painted
+ * before it (a sibling with a background, under it in z-index) is taken as in front of it: the picture can't tell.
+ */
+const OVER_CSS = `:has([${LAYER_ATTRIBUTE}]) { background: transparent !important; }`
 
 const isTransparent = (color: string) => color === "transparent" || /\/\s*0\)$|,\s*0\)$/.test(color)
 
@@ -426,7 +449,8 @@ async function copyState(page: HTMLElement, copy: HTMLElement) {
     clone.removeAttribute("loading")
     const src = img.currentSrc || img.src
     // an image that the page hasn't loaded (a lazy one far below) isn't drawn on it either
-    const data = src && img.complete && !img.closest("[glass-ignore]") ? await toDataUrl(src) : null
+    const data =
+      src && img.complete && !img.closest(`[glass-ignore], [${LAYER_ATTRIBUTE}]`) ? await toDataUrl(src) : null
     if (data) clone.setAttribute("src", await fitImage(img, data))
     else clone.removeAttribute("src")
   })
@@ -487,39 +511,55 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
 
   // what the page styles with is replaced by its CSS in one sheet, and what only matters to a live page is dropped
   for (const el of copy.querySelectorAll('script, noscript, style, link[rel~="stylesheet"]')) el.remove()
+  const layered = copy.querySelector(`[${LAYER_ATTRIBUTE}]`) !== null
   const style = document.createElementNS(XHTML_NS, "style")
-  style.textContent = css
+  style.textContent = layered ? css + OVER_MARK : css
   const head = copy.querySelector("head")
   if (head) head.replaceChildren(style)
   else copy.prepend(style)
   if (blur) copy.style.filter = `blur(${blur}px)`
 
-  const svg =
+  const markup = new XMLSerializer().serializeToString(copy)
+  const svg = (inner: string) =>
     `<svg xmlns="${SVG_NS}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<foreignObject x="0" y="0" width="100%" height="100%">${new XMLSerializer().serializeToString(copy)}</foreignObject>` +
+    `<foreignObject x="0" y="0" width="100%" height="100%">${inner}</foreignObject>` +
     "</svg>"
 
   // a data url and not a blob one: Chrome taints a canvas that draws an SVG with a foreignObject from a blob, and a
   // tainted canvas can't be a texture
-  const img = new Image()
-  img.decoding = "async"
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
-  await img.decode()
+  const load = async (source: string) => {
+    const img = new Image()
+    img.decoding = "async"
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`
+    await img.decode()
+    return img
+  }
+  // What is in front of the layers is the same copy with one more rule, serialized once: the mark stands in for it
+  const [img, overImg] = await Promise.all([
+    load(svg(markup)),
+    layered ? load(svg(markup.replace(OVER_MARK, OVER_CSS))) : null,
+  ])
 
   // a page bigger than a texture can be is drawn smaller, and stretched back to its size when it is drawn
   const scale = Math.min(1, maxTextureSize() / width, maxTextureSize() / height)
-  const canvas = document.createElement("canvas")
-  canvas.width = Math.max(1, Math.floor(width * scale))
-  canvas.height = Math.max(1, Math.floor(height * scale))
-  const ctx = canvas.getContext("2d")
-  if (ctx) {
-    for (const color of canvasColors()) {
-      ctx.fillStyle = color
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+  const draw = (image: HTMLImageElement, colors: string[]) => {
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.max(1, Math.floor(width * scale))
+    canvas.height = Math.max(1, Math.floor(height * scale))
+    const ctx = canvas.getContext("2d")
+    if (ctx) {
+      for (const color of colors) {
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
     }
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return canvas
   }
-  return { canvas, width, height, fresh: inlinedCount > inlinedBefore }
+  const canvas = draw(img, canvasColors())
+  // on nothing: what is under the layers is what is left out of it
+  const over = overImg ? draw(overImg, []) : null
+  return { canvas, width, height, fresh: inlinedCount > inlinedBefore, over }
 }
 
 /**
@@ -554,7 +594,8 @@ const ELEMENT_CSS = `
  */
 export async function snapshotElement(
   el: HTMLElement,
-  margin: number
+  margin: number,
+  extra = ""
 ): Promise<{ canvas: HTMLCanvasElement; fresh: boolean }> {
   const inlinedBefore = inlinedCount
   if (!viewport[""][0]) viewport = measureViewport()
@@ -586,7 +627,7 @@ export async function snapshotElement(
   copy.style.cssText +=
     `;position: absolute !important; inset: auto !important; left: ${margin}px !important; top: ${margin}px !important;` +
     ` width: ${width}px !important; height: ${height}px !important; margin: 0 !important; transform: none !important;` +
-    " translate: none !important; scale: none !important; rotate: none !important;"
+    ` translate: none !important; scale: none !important; rotate: none !important;${extra}`
   const style = document.createElementNS(XHTML_NS, "style")
   style.textContent = css + ELEMENT_CSS
   head.append(style)
@@ -607,4 +648,41 @@ export async function snapshotElement(
   canvas.height = Math.max(1, h)
   canvas.getContext("2d")?.drawImage(img, 0, 0, w, h)
   return { canvas, fresh: inlinedCount > inlinedBefore }
+}
+
+/** How much is around a layer in its picture past the reach of its blur, in px */
+const LAYER_MARGIN = 8
+
+/** How far the blurs of a filter reach, in px */
+function blurReach(filter: string) {
+  let sum = 0
+  for (const match of filter.matchAll(/blur\(([\d.]+)px\)/g)) sum += Number(match[1])
+  return Math.ceil(sum * 3)
+}
+
+/**
+ * Takes a picture of a layer (an element marked `glass-layer`), which the renderer moves on each frame to where the
+ * layer is drawn: without its transform and its opacity, which it reads there, and with no animation, which would
+ * otherwise be caught where it starts. The filters of its ancestors are put on it, since its copy is out of them: a
+ * box of blobs blurred together is the most usual way to make them, and it is each blob that moves.
+ *
+ * @returns The picture, `margin` px bigger than the box of the layer on each side, enough for what its blurs spread
+ */
+export async function snapshotLayer(
+  el: HTMLElement
+): Promise<{ canvas: HTMLCanvasElement; fresh: boolean; margin: number }> {
+  const filters: string[] = []
+  for (let n: HTMLElement | null = el; n && n !== document.documentElement; n = n.parentElement) {
+    const filter = getComputedStyle(n).filter
+    if (filter && filter !== "none") filters.push(filter)
+  }
+  const filter = filters.join(" ")
+  const margin = blurReach(filter) + LAYER_MARGIN
+  const { canvas, fresh } = await snapshotElement(
+    el,
+    margin,
+    ` filter: ${filter || "none"} !important; opacity: 1 !important; animation: none !important;` +
+      " transition: none !important;"
+  )
+  return { canvas, fresh, margin }
 }

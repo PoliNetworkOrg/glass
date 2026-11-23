@@ -14,12 +14,13 @@ drawn, so you can change the engine without breaking it. The code it describes i
 7. [The renderer and its passes](#the-renderer-and-its-passes)
 8. [The glass shader](#the-glass-shader)
 9. [Layers](#layers)
-10. [Getting pixels back to the DOM](#getting-pixels-back-to-the-dom)
-11. [Scroll prediction](#scroll-prediction)
-12. [When a glass is redrawn](#when-a-glass-is-redrawn)
-13. [Lifecycle and failure modes](#lifecycle-and-failure-modes)
-14. [Coordinate conventions](#coordinate-conventions)
-15. [Rules that are easy to break](#rules-that-are-easy-to-break)
+10. [Animated layers](#animated-layers)
+11. [Getting pixels back to the DOM](#getting-pixels-back-to-the-dom)
+12. [Scroll prediction](#scroll-prediction)
+13. [When a glass is redrawn](#when-a-glass-is-redrawn)
+14. [Lifecycle and failure modes](#lifecycle-and-failure-modes)
+15. [Coordinate conventions](#coordinate-conventions)
+16. [Rules that are easy to break](#rules-that-are-easy-to-break)
 
 ## The idea
 
@@ -36,7 +37,8 @@ Everything else in the codebase exists to keep that cheap and in step with the p
 single frame loop, captures that don't block the page, scroll prediction, and caching so a still glass costs nothing.
 
 The glass samples a *picture*, not the live page. That is why a video or a hover under it is stale until the next
-capture, and why glass can't see other glass without the [layer](#layers) machinery.
+capture, why glass can't see other glass without the [layer](#layers) machinery, and why what moves behind it all the
+time has to be marked as an [animated layer](#animated-layers).
 
 ## Map of the code
 
@@ -48,10 +50,12 @@ capture, and why glass can't see other glass without the [layer](#layers) machin
 | `3D/index.tsx` | `Glass3D`: the canvas, and the `frame()` callback that tells the renderer where the glass is and how to draw it. |
 | `3D/renderer.ts` | `GlassRenderer`: the single WebGL2 context, all the passes, caching, layers, copy-out. |
 | `3D/displacement.ts` | The GLSL for the glass and the blur, the sRGB helpers, and `profileUniforms` (config to uniforms). |
-| `3D/composite.ts` | The GLSL for the backdrop of higher layers: the page pass and the lower-glass composite pass. |
+| `3D/composite.ts` | The GLSL for backdrops: the page pass (whole, under the animated layers, or in front of them), the animated-layer pass and the lower-glass composite pass. |
+| `3D/layers.ts` | The animated layers (`glass-layer`): finds them, reads their box, transform and opacity in the read phase of every frame, keeps their pictures. |
+| `3D/pictures.ts` | Takes the pictures of elements (what a glass has over its glass, an animated layer) when they change, one at a time, never during a fast scroll. |
 | `3D/fallback.tsx` | `GlassFallback`: the CSS glass (`backdrop-filter`). |
 | `edge.tsx` | `GlassEdge` (rim and stroke) and `GlassShadow`, shared by both versions. |
-| `utils/snapshot.ts` | `snapshot()` (the page) and `snapshotElement()` (one element, for layers). |
+| `utils/snapshot.ts` | `snapshot()` (the page, and what it has in front of its animated layers), `snapshotElement()` (one element, for layers) and `snapshotLayer()` (an animated layer). |
 | `utils/hooks.ts` | `usePageSnapshot`, `useMotionBounds`, `useInView`, `useComputedStyle`, `useIncreasedContrast`. |
 | `utils/frames.ts` | The one `requestAnimationFrame` loop: read, commit, draw. Also the frame time and last scroll input behind `autoLead()`. |
 | `utils/predict.ts` | Scroll prediction (`createPredictor`). |
@@ -348,6 +352,51 @@ bottom left of a texture that may be bigger than it).
 What a higher layer doesn't see of the glass below: its shadow, its pressed light, and the blur of CSS glass (nested glass,
 `disable3D`), which it sees as tint only.
 
+## Animated layers
+
+The page picture is taken once, so what moves on the page by itself (an animation) is wherever it was then. An element
+marked `glass-layer` is drawn where it is on **every frame** instead.
+
+**Capture.** `pageCss()` hides `[glass-layer]` in the page picture, as it does `[glass-ignore]`. Where the page has a
+layer, `snapshot()` also returns `over`: the same copy with one more rule, `:has([glass-layer]) { background:
+transparent }` (so `<html>`, `<body>` and every other ancestor of a layer), drawn without the canvas colors. That is what
+the page has *in front of* its layers. The copy is serialized once: the rule goes in where `OVER_MARK` stands in the
+CSS. Each layer has its own picture from `snapshotLayer()`: `snapshotElement()` with its opacity at 1, its animations and
+transitions off (their first keyframe would be caught otherwise; `!important` beats an animation), and the filters of
+the layer and of its ancestors on it, since its shell has none: a box blurred around its blobs is the usual way, and it
+is each blob that moves. The margin is three times the sum of their `blur()`s, plus 8px. The pictures are taken by
+`takePicture()` (`3D/pictures.ts`), as overlays are: once, again on a mutation or a resize, one at a time, not during a
+fast scroll. A JavaScript animation writing the layer's own `style` is not a mutation that counts.
+
+**Every frame.** `watchLayers()` registers a reader in the frame loop while a renderer draws. For each layer it reads
+`offsetWidth/Height`, `getBoundingClientRect()` and, from its computed style (kept: it is live), `transform`,
+`rotate`, `scale` and `opacity`. The linear part of the transform (`rotate · scale · transform`, in the plane only) is
+worked out only when one of the three strings changes, by `scan()`, which reads the numbers without cutting the string.
+The center of the box, transform included, is the center of its bounding rect, whatever the transform origin: a box
+transformed about any point is still centered where its bounds are. It is kept in screen space for a layer in a fixed
+box (it stays in place while the page scrolls ahead) and in page space otherwise. `version` goes up when anything
+changed. `MutationObserver` on the document finds layers that come and go, and `onLayersChange` has the capture taken
+again then.
+
+**Drawing.** The host hands the renderer `layers()`. A glass with any layer in its region (the region and overlap test
+are those of a [backdrop](#layers); the layer's extent is its picture through its matrix) gets a backdrop even on
+layer 0, drawn in three steps:
+
+1. **Under.** The page pass in mode 1: where `over` has alpha `a` and color `F` (premultiplied), the page is
+   `P = F + (1 - a)·U`, blended in sRGB values as the browser blends, so `U = (P - F) / (1 - a)`, and where `a` is about 1
+   it doesn't matter. Both are read with `texelFetch` at the same texel: a bilinear blend of the edges of the text would
+   throw the division off.
+2. **Layers**, in the order of the document: `LAYER_VERTEX` maps the quad of the picture through the matrix around the
+   center, premultiplied, times the opacity, blended `ONE, ONE_MINUS_SRC_ALPHA`.
+3. **In front.** The page pass in mode 2: `over`, premultiplied, blended over.
+
+Then the lower glass, as for any backdrop. With no `over` (a picture taken before the page had layers) step 1 is the
+whole page and step 3 is skipped. What the backdrop is drawn from includes each layer, its version and its picture
+version, so a glass under a still layer isn't drawn again. In the worker, the page sends the layers (`layers`, when one
+changed) and their pictures (`layer-picture`, as flipped, premultiplied bitmaps), and `over` with the snapshot.
+
+The cost is only where a layer moves under a glass: that glass's backdrop, its frost blur and the glass, every frame.
+
 ## Getting pixels back to the DOM
 
 The renderer can't just hand each glass its own canvas: a canvas can't be shared between contexts, and per-glass WebGL
@@ -469,6 +518,8 @@ This is where most bugs come from. Four spaces are in play:
 ## Rules that are easy to break
 
 - **The snapshot must not contain glass.** Anything that draws glass must carry `glass-ignore`. `<Glass>` does it itself.
+- **`over` and the page are read at the same texel.** Working out what is under the layers divides by what `over`
+  leaves of the page: read with filtering, the two disagree at the edges of text, which comes out with fringes.
 - **Don't add per-frame DOM reads outside `watchFrames`.** Reads go in the read phase, writes in commit, GL in draw.
 - **Don't create a second WebGL context for drawing.** (`capability.ts` makes a throwaway one for the benchmark;
   `snapshot.ts` makes one to read `MAX_TEXTURE_SIZE`, and loses it right away.)

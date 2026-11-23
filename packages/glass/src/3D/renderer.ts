@@ -1,4 +1,4 @@
-import { GLASS_FRAGMENT, GLASS_VERTEX, PAGE_FRAGMENT, PAGE_VERTEX } from "./composite"
+import { GLASS_FRAGMENT, GLASS_VERTEX, LAYER_FRAGMENT, LAYER_VERTEX, PAGE_FRAGMENT, PAGE_VERTEX } from "./composite"
 import {
   BLUR_FRAGMENT,
   BLUR_VERTEX,
@@ -27,6 +27,10 @@ import {
 // picture of the element, taken when it changes). That backdrop is drawn for the region the layer covers, only when
 // something in it moved or changed.
 //
+// Animated layers of the page (`glass-layer`, blobs drifting in the background) aren't in its picture: each has a
+// picture of its own, which is drawn on every frame where the layer is then, behind the glass it is under. That glass
+// bends a backdrop drawn as a higher layer's is: what is under the layers, the layers, and what is in front of them.
+//
 // Nothing here touches the page: what runs on its frames, where it is scrolled and the pictures of the elements come
 // from a host (main.ts on the page's thread, worker.ts in a worker), so the same renderer runs in either.
 
@@ -37,7 +41,40 @@ export type Picture = {
   /** The size of what it shows, in CSS px, which can be bigger than the pixels */
   width: number
   height: number
+  /** What the page has in front of its animated layers, the same size, not premultiplied: see `over` of `Snapshot` */
+  over?: HTMLCanvasElement | ImageBitmap | null
 }
+
+/**
+ * An animated layer of the page (an element marked `glass-layer`), as it is on this frame. The host reads it on every
+ * frame (3D/layers.ts, on the page) and changes it in place.
+ */
+export type LiveLayer = {
+  id: number
+  /**
+   * Its picture, without its transform and its opacity, `margin` px bigger than its box on each side: flipped and
+   * premultiplied as a bitmap, or a canvas the renderer uploads so
+   */
+  picture: HTMLCanvasElement | ImageBitmap | null
+  margin: number
+  /** One more each time a new picture is put in */
+  pictureVersion: number
+  /** The size of its box, in CSS px */
+  width: number
+  height: number
+  /** Where the center of its box is, its transform included: on the screen where it is fixed there, on the page if not */
+  center: [number, number]
+  fixed: boolean
+  /** Its transform without the move: x' = a x + c y, y' = b x + d y, y down */
+  matrix: [number, number, number, number]
+  opacity: number
+  visible: boolean
+  /** One more whenever any of where it is and how it is drawn changes */
+  version: number
+}
+
+/** The layers of the page, and a number that changes whenever which they are changes */
+export type LiveLayers = { list: LiveLayer[]; set: number }
 
 /** Where a glass is and how it is drawn, on a frame */
 export type GlassState = {
@@ -108,7 +145,8 @@ const GLASS_UNIFORMS = [
   "uLift",
 ]
 const BLUR_UNIFORMS = ["uSource", "uStep", "uSigma", "uRadius", "uEncoded"]
-const PAGE_UNIFORMS = ["uPage", "uPageSize", "uRegion", "uScroll"]
+const PAGE_UNIFORMS = ["uPage", "uOver", "uMode", "uPageSize", "uRegion", "uScroll"]
+const LAYER_UNIFORMS = ["uPicture", "uCenter", "uHalf", "uMatrix", "uRegion", "uOpacity"]
 const COMPOSITE_UNIFORMS = [
   "uGlass",
   "uOverlay",
@@ -182,6 +220,8 @@ export type RendererHost = {
    * The first call is where the host starts watching the glass.
    */
   overlay: (target: GlassTarget, state: GlassState, overlay: Overlay) => void
+  /** The animated layers of the page as they are on this frame, read before it is drawn */
+  layers?: () => LiveLayers
 }
 
 type Entry = {
@@ -203,6 +243,8 @@ type Entry = {
   behind: Backdrop | null
   /** The glass below that is in its backdrop, and what the backdrop was last drawn from, kept from frame to frame */
   under: Glass[]
+  /** The animated layers of the page that are in its backdrop */
+  layersIn: LiveLayer[]
   drawnFrom: unknown[]
   /** What is behind it blurred by its frost, and the blur across it, which the blur down it reads */
   frosted: Target | null
@@ -216,6 +258,16 @@ type Glass = { target: GlassTarget; entry: Entry; state: GlassState }
  * renderer, changes whenever it is drawn again, which is how the glass on it knows to be drawn again.
  */
 type Backdrop = Target & { version: number; region: [number, number, number, number] }
+
+const NO_LAYERS: LiveLayer[] = []
+
+/** Half the size of what a layer draws on the screen, its picture through its transform, in px */
+const layerHalf = (l: LiveLayer, axis: 0 | 1) => {
+  const hw = l.width / 2 + l.margin
+  const hh = l.height / 2 + l.margin
+  const [a, b, c, d] = l.matrix
+  return axis === 0 ? Math.abs(a) * hw + Math.abs(c) * hh : Math.abs(b) * hw + Math.abs(d) * hh
+}
 
 const followsInDocument = (a: Glass, b: Glass) => {
   const x = a.state.element
@@ -242,8 +294,15 @@ export class GlassRenderer {
   private glassOnBackdrop!: Program
   private page!: Program
   private composite!: Program
+  private layer!: Program
   private blur!: Program
   private readonly textures = new Map<Picture, WebGLTexture>()
+  /** What the pictures have in front of their layers, see `over` of `Picture` */
+  private readonly overTextures = new Map<Picture, WebGLTexture>()
+  /** The pictures of the animated layers on the GPU, and which of each it is */
+  private readonly layerTextures = new Map<LiveLayer, { texture: WebGLTexture; version: number }>()
+  /** Which layers were last seen, see `set` of `LiveLayers` */
+  private layerSet = -1
   /** The pictures blurred by a frost, by its sigma */
   private readonly blurs = new Map<Picture, Map<number, Target>>()
   private readonly entries = new Map<GlassTarget, Entry>()
@@ -287,6 +346,8 @@ export class GlassRenderer {
     canvas.addEventListener("webglcontextrestored", () => {
       // everything that was on the GPU is gone with it
       this.textures.clear()
+      this.overTextures.clear()
+      this.layerTextures.clear()
       this.blurs.clear()
       for (const entry of this.entries.values()) {
         entry.output = null
@@ -310,6 +371,7 @@ export class GlassRenderer {
     this.glassOnBackdrop = link(gl, VERTEX, fragment(true), GLASS_UNIFORMS)
     this.page = link(gl, PAGE_VERTEX, PAGE_FRAGMENT, PAGE_UNIFORMS)
     this.composite = link(gl, GLASS_VERTEX, GLASS_FRAGMENT, COMPOSITE_UNIFORMS)
+    this.layer = link(gl, LAYER_VERTEX, LAYER_FRAGMENT, LAYER_UNIFORMS)
     this.blur = link(gl, BLUR_VERTEX, BLUR_FRAGMENT, BLUR_UNIFORMS)
   }
 
@@ -327,6 +389,7 @@ export class GlassRenderer {
       overlay: null,
       behind: null,
       under: [],
+      layersIn: [],
       drawnFrom: [],
       frosted: null,
       across: null,
@@ -343,6 +406,9 @@ export class GlassRenderer {
         this.frameGlasses.length = 0
         this.frameBelow.length = 0
         this.frameDrawn.length = 0
+        for (const { texture } of this.layerTextures.values()) this.gl.deleteTexture(texture)
+        this.layerTextures.clear()
+        this.layerSet = -1
       }
     }
   }
@@ -366,6 +432,9 @@ export class GlassRenderer {
     const texture = this.textures.get(snapshot)
     if (texture) this.gl.deleteTexture(texture)
     this.textures.delete(snapshot)
+    const over = this.overTextures.get(snapshot)
+    if (over) this.gl.deleteTexture(over)
+    this.overTextures.delete(snapshot)
     for (const blurred of this.blurs.get(snapshot)?.values() ?? []) this.drop(blurred)
     this.blurs.delete(snapshot)
   }
@@ -376,21 +445,35 @@ export class GlassRenderer {
    * more memory and a pass over the whole page on every capture.
    */
   private texture(snapshot: Picture) {
-    const gl = this.gl
     let texture = this.textures.get(snapshot)
     if (texture) return texture
-    texture = gl.createTexture()
-    const { width, height } = snapshot.canvas
+    texture = this.upload(snapshot.canvas)
+    this.textures.set(snapshot, texture)
+    return texture
+  }
+
+  /** What a picture of the page has in front of its layers on the GPU, uploaded as the page is, or null where it has none */
+  private overTexture(snapshot: Picture) {
+    if (!snapshot.over) return null
+    let texture = this.overTextures.get(snapshot)
+    if (texture) return texture
+    texture = this.upload(snapshot.over)
+    this.overTextures.set(snapshot, texture)
+    return texture
+  }
+
+  private upload(source: HTMLCanvasElement | ImageBitmap) {
+    const gl = this.gl
+    const texture = gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, texture)
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.SRGB8_ALPHA8, width, height)
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, snapshot.canvas)
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.SRGB8_ALPHA8, source.width, source.height)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    this.textures.set(snapshot, texture)
     return texture
   }
 
@@ -515,7 +598,13 @@ export class GlassRenderer {
    * own: a fixed header and a fixed tab bar together would cover the whole screen, drawn again on every frame of a
    * scroll, and on their own they cover two strips of it.
    */
-  private backdrop(glass: Glass, below: Glass[], scrollX: number, scrollY: number): Backdrop | null {
+  private backdrop(
+    glass: Glass,
+    below: Glass[],
+    layers: LiveLayer[],
+    scrollX: number,
+    scrollY: number
+  ): Backdrop | null {
     const { entry, state } = glass
     // the region: where the glass is on the screen, and as far around it as the blur of its frost reads
     const reach = (state.uniforms.frost > 0 ? blurReach(frostSigma(state.uniforms.frost)) : 0) + BACKDROP_MARGIN
@@ -537,7 +626,18 @@ export class GlassRenderer {
       const hh = (o.drawn[1] * (o.height + OVERLAY_MARGIN * 2)) / o.height / 2
       if (cx + hw > rx && cx - hw < rx + rw && cy + hh > ry && cy - hh < ry + rh) under.push(other)
     }
-    if (under.length === 0) {
+    // and the animated layers of the page
+    const layersIn = entry.layersIn
+    layersIn.length = 0
+    for (const l of layers) {
+      if (!l.visible || l.opacity <= 0 || !l.picture) continue
+      const cx = l.fixed ? l.center[0] : l.center[0] - scrollX
+      const cy = l.fixed ? l.center[1] : l.center[1] - scrollY
+      const hw = layerHalf(l, 0)
+      const hh = layerHalf(l, 1)
+      if (cx + hw > rx && cx - hw < rx + rw && cy + hh > ry && cy - hh < ry + rh) layersIn.push(l)
+    }
+    if (under.length === 0 && layersIn.length === 0) {
       // nothing in it any more: let go of what it was last drawn from
       entry.drawnFrom.length = 0
       return null
@@ -565,6 +665,11 @@ export class GlassRenderer {
       changed = put(from, n++, s.center[1]) || changed
       changed = put(from, n++, overlay.version) || changed
     }
+    for (const l of layersIn) {
+      changed = put(from, n++, l) || changed
+      changed = put(from, n++, l.version) || changed
+      changed = put(from, n++, l.pictureVersion) || changed
+    }
     if (from.length !== n) {
       from.length = n
       changed = true
@@ -591,17 +696,59 @@ export class GlassRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, backdrop.fbo)
     gl.viewport(0, 0, rw, rh)
 
-    // the page
+    // The page: all of it, or, with layers in it, what is under them (what the page has in front of them is drawn
+    // over them after). A picture taken before the page had layers has nothing for that: they are drawn over it.
+    const over = layersIn.length > 0 ? this.overTexture(snapshot) : null
     const page = this.page
     gl.useProgram(page.program)
     gl.bindVertexArray(page.vao)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.texture(snapshot))
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, over)
     gl.uniform1i(page.uniforms.uPage, 0)
+    gl.uniform1i(page.uniforms.uOver, 1)
+    gl.uniform1i(page.uniforms.uMode, over ? 1 : 0)
     gl.uniform2f(page.uniforms.uPageSize, snapshot.width, snapshot.height)
     gl.uniform4f(page.uniforms.uRegion, rx, ry, rw, rh)
     gl.uniform2f(page.uniforms.uScroll, scrollX, scrollY)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+    if (layersIn.length > 0) {
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+      // the layers, where they are on this frame, in the order of the document
+      const l = this.layer
+      gl.useProgram(l.program)
+      gl.bindVertexArray(l.vao)
+      gl.uniform1i(l.uniforms.uPicture, 0)
+      gl.uniform4f(l.uniforms.uRegion, rx, ry, rw, rh)
+      for (const layer of layersIn) {
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, this.layerTexture(layer))
+        gl.uniform2f(
+          l.uniforms.uCenter,
+          layer.fixed ? layer.center[0] : layer.center[0] - scrollX,
+          layer.fixed ? layer.center[1] : layer.center[1] - scrollY
+        )
+        gl.uniform2f(l.uniforms.uHalf, layer.width / 2 + layer.margin, layer.height / 2 + layer.margin)
+        gl.uniform4f(l.uniforms.uMatrix, layer.matrix[0], layer.matrix[1], layer.matrix[2], layer.matrix[3])
+        gl.uniform1f(l.uniforms.uOpacity, layer.opacity)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      }
+      // and what the page has in front of them
+      if (over) {
+        gl.useProgram(page.program)
+        gl.bindVertexArray(page.vao)
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, this.texture(snapshot))
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, over)
+        gl.uniform1i(page.uniforms.uMode, 2)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      }
+      gl.disable(gl.BLEND)
+    }
 
     // and the glass below, each as it was drawn, under what it has over it
     const c = this.composite
@@ -640,6 +787,29 @@ export class GlassRenderer {
     gl.disable(gl.BLEND)
     gl.activeTexture(gl.TEXTURE0)
     return backdrop
+  }
+
+  /** The picture of a layer on the GPU, uploaded again whenever it is a new one */
+  private layerTexture(layer: LiveLayer) {
+    const gl = this.gl
+    const gpu = this.layerTextures.get(layer)
+    if (gpu && gpu.version === layer.pictureVersion) return gpu.texture
+    const texture = gpu?.texture ?? gl.createTexture()
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    if (layer.picture) {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, layer.picture)
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    if (gpu) gpu.version = layer.pictureVersion
+    else this.layerTextures.set(layer, { texture, version: layer.pictureVersion })
+    return texture
   }
 
   private uploadOverlay(overlay: Overlay) {
@@ -745,6 +915,18 @@ export class GlassRenderer {
     }
     const [scrollX, scrollY] = this.host.scroll(time, glasses[0].state.lead)
 
+    // the animated layers of the page, as they are on this frame; the pictures of those that went are let go
+    const live = this.host.layers?.() ?? null
+    const animated = live && live.list.length > 0 ? live.list : NO_LAYERS
+    if (live && live.set !== this.layerSet) {
+      this.layerSet = live.set
+      for (const [layer, { texture }] of this.layerTextures) {
+        if (live.list.includes(layer)) continue
+        this.gl.deleteTexture(texture)
+        this.layerTextures.delete(layer)
+      }
+    }
+
     // from the bottom layer up: each is drawn before the ones above it, which may be drawn over it
     const layers = this.frameLayers
     layers.length = 0
@@ -759,10 +941,12 @@ export class GlassRenderer {
         if (glass.state.layer !== layer) continue
         const { entry, state } = glass
         let backdrop: Backdrop | null = null
-        if (below.length > 0) backdrop = this.backdrop(glass, below, scrollX, scrollY)
-        else if (entry.under.length > 0) {
-          // the glass below it went: let go of it and of what this was last drawn from
+        if (below.length > 0 || animated.length > 0) {
+          backdrop = this.backdrop(glass, below, animated, scrollX, scrollY)
+        } else if (entry.under.length > 0 || entry.layersIn.length > 0) {
+          // the glass below it and the layers went: let go of them and of what this was last drawn from
           entry.under.length = 0
+          entry.layersIn.length = 0
           entry.drawnFrom.length = 0
         }
         const same =

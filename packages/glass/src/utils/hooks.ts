@@ -1,5 +1,6 @@
 import { useMotionValue } from "motion/react"
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { onLayersChange } from "../3D/layers"
 import { releaseSnapshot } from "../3D/main"
 import { watchFrames } from "./frames"
 import { onMediaChange, type Snapshot, snapshot } from "./snapshot"
@@ -35,8 +36,9 @@ const afterNextFrame = () => new Promise<void>((resolve) => requestAnimationFram
  *  # usePageSnapshot
  * React hook to capture the page, and capture it again when it changes.
  *
- * The page is captured again when `deps` or `blur` change, when it changes size, and when an image or a font
- * finishes loading, since the capture before it was taken without them.
+ * The page is captured again when `deps` or `blur` change, when it changes size, when an image or a font
+ * finishes loading, since the capture before it was taken without them, and when an element becomes an animated
+ * layer (`glass-layer`) or stops being one.
  *
  * ### Note
  * One capture runs at a time: whatever asks for one while it runs gets a single capture after it, a frame later. So
@@ -130,7 +132,10 @@ export function usePageSnapshot(deps: unknown[] = [], blur: number = 0, enabled:
     document.fonts.addEventListener("loadingdone", fontsLoaded)
     // the page restyled by a media query (the device's theme) looks different at the same size
     const stopMedia = onMediaChange(() => capturer.schedule())
+    // a layer that comes or goes is left out of the picture, or back in it, and what is in front of them with it
+    const stopLayers = onLayersChange(() => capturer.schedule())
     return () => {
+      stopLayers()
       capturer.stop()
       observer.disconnect()
       document.removeEventListener("load", loaded, true)

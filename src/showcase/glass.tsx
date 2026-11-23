@@ -127,8 +127,10 @@ export function Segmented<T extends string>({
     options.findIndex((option) => option.value === value)
   )
   const n = options.length
+  // Columns of one width, the widest option's, which is what the lens is as wide as: as a row of flex-1 buttons in a
+  // row as wide as its content, a longer label ("Captured" by "Live") took more than its share, under the lens
   return (
-    <ShowGlass className={cn("flex rounded-full p-1", className)} role="group">
+    <ShowGlass className={cn("grid grid-flow-col auto-cols-fr rounded-full p-1", className)} role="group">
       <ShowGlass
         aria-hidden
         className="rounded-full"
@@ -152,7 +154,7 @@ export function Segmented<T extends string>({
           title={option.title}
           onClick={() => onChange(option.value)}
           className={cn(
-            "relative z-[2] flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-opacity",
+            "relative z-[2] flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-opacity",
             option.value === value ? "opacity-100" : "opacity-60 hover:opacity-90"
           )}
         >

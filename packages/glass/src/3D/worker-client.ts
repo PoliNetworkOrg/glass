@@ -1,4 +1,5 @@
 import { drawFrames, frameScroll } from "../utils/frames"
+import { inFixedBox, liveLayers, watchLayers } from "./layers"
 import type { Renderer } from "./main"
 import { forgetPicture, takePicture, tickPictures } from "./pictures"
 import type { FromWorker, ToWorker } from "./protocol"
@@ -43,14 +44,6 @@ type Sent = {
   fixed: boolean | null
 }
 
-/** Whether `element` is in a box fixed to the screen, which keeps it in place there while the page scrolls */
-function inFixedBox(element: HTMLElement) {
-  for (let node: Element | null = element; node && node !== document.body; node = node.parentElement) {
-    if (getComputedStyle(node).position === "fixed") return true
-  }
-  return false
-}
-
 class WorkerRenderer implements Renderer {
   private readonly worker: Worker
   private readonly glasses = new Map<GlassTarget, Sent>()
@@ -63,6 +56,10 @@ class WorkerRenderer implements Renderer {
   private readonly last = { x: Number.NaN, y: Number.NaN }
   /** The states of this frame, one list kept from frame to frame */
   private readonly states: (GlassState | null)[] = []
+  /** What the worker was last told of the animated layers: which they were, each one's version and picture */
+  private layersSet = -1
+  private readonly layerVersions = new Map<number, number>()
+  private readonly layerPictures = new Map<number, number>()
 
   constructor() {
     this.worker = new GlassWorker()
@@ -104,11 +101,16 @@ class WorkerRenderer implements Renderer {
     this.reorder = true
     this.post({ type: "add", id, canvas: offscreen }, [offscreen])
     if (!this.stop) {
+      const stopLayers = watchLayers()
       const stopFrames = drawFrames((time) => this.tick(time))
       const stopFeed = feedScroll((t, x, y) => this.sample(t, x, y))
       this.stop = () => {
         stopFrames()
         stopFeed()
+        stopLayers()
+        this.layersSet = -1
+        this.layerVersions.clear()
+        this.layerPictures.clear()
       }
     }
     return () => {
@@ -148,9 +150,14 @@ class WorkerRenderer implements Renderer {
     const sent = id
     this.pictureIds.set(snapshot, id)
     // taken now, before the canvas can be freed; flipped here, as a bitmap isn't by the GPU
-    createImageBitmap(snapshot.canvas, { imageOrientation: "flipY", premultiplyAlpha: "none" })
-      .then((bitmap) =>
-        this.post({ type: "snapshot", id: sent, bitmap, width: snapshot.width, height: snapshot.height }, [bitmap])
+    const flipped = (canvas: HTMLCanvasElement | ImageBitmap) =>
+      createImageBitmap(canvas, { imageOrientation: "flipY", premultiplyAlpha: "none" })
+    Promise.all([flipped(snapshot.canvas), snapshot.over ? flipped(snapshot.over) : null])
+      .then(([bitmap, over]) =>
+        this.post({ type: "snapshot", id: sent, bitmap, over, width: snapshot.width, height: snapshot.height }, [
+          bitmap,
+          ...(over ? [over] : []),
+        ])
       )
       .catch(() => {
         /* the canvas was freed first: a newer picture takes its place */
@@ -158,11 +165,52 @@ class WorkerRenderer implements Renderer {
     return id
   }
 
+  /** Tells the worker of the animated layers, when which they are or one of them changed, and sends new pictures */
+  private sendLayers() {
+    const { list, set } = liveLayers
+    let changed = set !== this.layersSet
+    for (const layer of list) {
+      if (this.layerVersions.get(layer.id) !== layer.version) changed = true
+      const picture = layer.picture
+      if (!picture || this.layerPictures.get(layer.id) === layer.pictureVersion) continue
+      this.layerPictures.set(layer.id, layer.pictureVersion)
+      const { id, margin } = layer
+      createImageBitmap(picture, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" })
+        .then((bitmap) => this.post({ type: "layer-picture", id, bitmap, margin }, [bitmap]))
+        .catch(() => {})
+    }
+    if (!changed) return
+    if (set !== this.layersSet) {
+      this.layersSet = set
+      for (const id of [...this.layerVersions.keys()]) {
+        if (list.some((layer) => layer.id === id)) continue
+        this.layerVersions.delete(id)
+        this.layerPictures.delete(id)
+      }
+    }
+    for (const layer of list) this.layerVersions.set(layer.id, layer.version)
+    this.post({
+      type: "layers",
+      layers: list.map(({ id, version, width, height, center, fixed, matrix, opacity, visible }) => ({
+        id,
+        version,
+        width,
+        height,
+        center,
+        fixed,
+        matrix,
+        opacity,
+        visible,
+      })),
+    })
+  }
+
   private tick(time: number) {
     tickPictures(time)
     if (this.frames++ % VSYNC_EVERY === 0) this.post({ type: "vsync", t: performance.timeOrigin + time })
     const t = clock()
     this.sample(t, frameScroll.x, frameScroll.y)
+    this.sendLayers()
 
     const states = this.states
     states.length = 0
@@ -196,7 +244,7 @@ class WorkerRenderer implements Renderer {
       // asked once: the worker learns it from how the glass moves too, but only after the page has scrolled
       if (sent.fixed === null && state.element) sent.fixed = inFixedBox(state.element)
       if (sent.overlay && state.element) {
-        takePicture(target, state.element, (canvas) => {
+        takePicture(target, state.element, ({ canvas }) => {
           createImageBitmap(canvas, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" })
             .then((bitmap) => this.post({ type: "overlay", id: sent.id, bitmap }, [bitmap]))
             .catch(() => {})
