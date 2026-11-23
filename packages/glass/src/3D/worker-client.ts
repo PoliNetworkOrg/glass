@@ -3,7 +3,7 @@ import { inFixedBox, liveLayers, watchLayers } from "./layers"
 import type { Renderer } from "./main"
 import { forgetPicture, takePicture, tickPictures } from "./pictures"
 import type { FromWorker, ToWorker } from "./protocol"
-import type { GlassState, GlassTarget, Picture } from "./renderer"
+import { type GlassState, type GlassTarget, type LiveLayer, layerHalf, type Picture } from "./renderer"
 import GlassWorker from "./worker?worker&inline"
 
 // The page's side of the renderer in a worker (worker.ts): it reads what only the page can, on its frames, and sends
@@ -18,6 +18,34 @@ const TIGHT = 4
 const TIGHT_FOR = 300
 /** Every how many frames of the page the worker is told when one started, to keep its own in step */
 const VSYNC_EVERY = 30
+/**
+ * How close to a glass a live layer (a canvas) has to be for its picture to be sent, in px: it is taken on every frame,
+ * and only what is behind a glass, or about to be, as far as its frost reads, needs it
+ */
+const LIVE_NEAR = 256
+
+/**
+ * What the worker needs to be told again about a layer when it changes: its version, or for a live layer, which is
+ * moved by its pictures, only whether it shows and how much
+ */
+const layerKey = (layer: LiveLayer) => (layer.live ? `${layer.visible} ${layer.opacity}` : layer.version)
+
+/** Whether `layer` is near enough a glass of this frame for the glass to draw it: see {@link LIVE_NEAR} */
+function nearGlass(layer: LiveLayer, states: (GlassState | null)[]) {
+  const x = layer.center[0] + (layer.fixed ? frameScroll.x : 0)
+  const y = layer.center[1] + (layer.fixed ? frameScroll.y : 0)
+  const hw = layerHalf(layer, 0) + LIVE_NEAR
+  const hh = layerHalf(layer, 1) + LIVE_NEAR
+  for (const state of states) {
+    if (!state) continue
+    if (
+      Math.abs(state.center[0] - x) < hw + state.drawn[0] / 2 &&
+      Math.abs(state.center[1] - y) < hh + state.drawn[1] / 2
+    )
+      return true
+  }
+  return false
+}
 
 const clock = () => performance.timeOrigin + performance.now()
 
@@ -58,8 +86,10 @@ class WorkerRenderer implements Renderer {
   private readonly states: (GlassState | null)[] = []
   /** What the worker was last told of the animated layers: which they were, each one's version and picture */
   private layersSet = -1
-  private readonly layerVersions = new Map<number, number>()
+  private readonly layerVersions = new Map<number, number | string>()
   private readonly layerPictures = new Map<number, number>()
+  /** Live layers whose picture is on its way to the worker: one at a time each, the next one is taken once it is */
+  private readonly layerSending = new Set<number>()
 
   constructor() {
     this.worker = new GlassWorker()
@@ -111,6 +141,7 @@ class WorkerRenderer implements Renderer {
         this.layersSet = -1
         this.layerVersions.clear()
         this.layerPictures.clear()
+        this.layerSending.clear()
       }
     }
     return () => {
@@ -166,13 +197,17 @@ class WorkerRenderer implements Renderer {
   }
 
   /** Tells the worker of the animated layers, when which they are or one of them changed, and sends new pictures */
-  private sendLayers() {
+  private sendLayers(states: (GlassState | null)[]) {
     const { list, set } = liveLayers
     let changed = set !== this.layersSet
     for (const layer of list) {
-      if (this.layerVersions.get(layer.id) !== layer.version) changed = true
+      if (this.layerVersions.get(layer.id) !== layerKey(layer)) changed = true
       const picture = layer.picture
       if (!picture || this.layerPictures.get(layer.id) === layer.pictureVersion) continue
+      if (layer.live) {
+        if (layer.visible && !this.layerSending.has(layer.id) && nearGlass(layer, states)) this.sendLive(layer, picture)
+        continue
+      }
       this.layerPictures.set(layer.id, layer.pictureVersion)
       const { id, margin } = layer
       createImageBitmap(picture, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" })
@@ -186,12 +221,13 @@ class WorkerRenderer implements Renderer {
         if (list.some((layer) => layer.id === id)) continue
         this.layerVersions.delete(id)
         this.layerPictures.delete(id)
+        this.layerSending.delete(id)
       }
     }
-    for (const layer of list) this.layerVersions.set(layer.id, layer.version)
+    for (const layer of list) this.layerVersions.set(layer.id, layerKey(layer))
     this.post({
       type: "layers",
-      layers: list.map(({ id, version, width, height, center, fixed, matrix, opacity, visible }) => ({
+      layers: list.map(({ id, version, width, height, center, fixed, matrix, opacity, visible, live }) => ({
         id,
         version,
         width,
@@ -201,8 +237,37 @@ class WorkerRenderer implements Renderer {
         matrix,
         opacity,
         visible,
+        live,
       })),
     })
+  }
+
+  /**
+   * Sends the picture of a live layer (a canvas) as it is now, with where it is now: the page draws on it and moves it
+   * on the same frame, so the worker moves it when the picture comes. At 1x, as the glass draws what is behind it, which
+   * is a quarter of the pixels to copy at 2x.
+   */
+  private sendLive(layer: LiveLayer, picture: HTMLCanvasElement | ImageBitmap) {
+    const { id } = layer
+    this.layerPictures.set(id, layer.pictureVersion)
+    this.layerSending.add(id)
+    const place = {
+      width: layer.width,
+      height: layer.height,
+      center: [layer.center[0], layer.center[1]] as [number, number],
+      fixed: layer.fixed,
+      matrix: [...layer.matrix] as [number, number, number, number],
+    }
+    createImageBitmap(picture, {
+      imageOrientation: "flipY",
+      premultiplyAlpha: "premultiply",
+      resizeWidth: Math.max(1, Math.min(picture.width, Math.ceil(layer.width))),
+      resizeHeight: Math.max(1, Math.min(picture.height, Math.ceil(layer.height))),
+      resizeQuality: "medium",
+    })
+      .then((bitmap) => this.post({ type: "layer-picture", id, bitmap, margin: 0, place }, [bitmap]))
+      .catch(() => {})
+      .finally(() => this.layerSending.delete(id))
   }
 
   private tick(time: number) {
@@ -210,11 +275,11 @@ class WorkerRenderer implements Renderer {
     if (this.frames++ % VSYNC_EVERY === 0) this.post({ type: "vsync", t: performance.timeOrigin + time })
     const t = clock()
     this.sample(t, frameScroll.x, frameScroll.y)
-    this.sendLayers()
 
     const states = this.states
     states.length = 0
     for (const target of this.glasses.keys()) states.push(target.frame(time))
+    this.sendLayers(states)
     if (this.reorder) {
       // where each is in the document, which decides which of two on a layer is drawn over the other
       const ordered: [Sent, HTMLElement][] = []

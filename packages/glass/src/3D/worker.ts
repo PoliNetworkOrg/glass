@@ -291,6 +291,11 @@ scope.onmessage = ({ data: m }) => {
         if (!layer) {
           layer = { ...sent, picture: null, margin: 0, pictureVersion: 0 }
           layerById.set(sent.id, layer)
+        } else if (layer.live) {
+          // a live layer is moved by its pictures, which say where it was when they were taken
+          if (layer.opacity !== sent.opacity || layer.visible !== sent.visible) layer.version++
+          layer.opacity = sent.opacity
+          layer.visible = sent.visible
         } else {
           layer.version = sent.version
           layer.width = sent.width
@@ -325,6 +330,13 @@ scope.onmessage = ({ data: m }) => {
       if (layer.picture instanceof ImageBitmap) layer.picture.close()
       layer.picture = m.bitmap
       layer.margin = m.margin
+      if (m.place) {
+        layer.width = m.place.width
+        layer.height = m.place.height
+        layer.center = m.place.center
+        layer.fixed = m.place.fixed
+        layer.matrix = m.place.matrix
+      }
       layer.pictureVersion++
       layer.version++
       wake(100)

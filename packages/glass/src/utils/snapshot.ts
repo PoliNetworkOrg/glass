@@ -448,9 +448,11 @@ async function copyState(page: HTMLElement, copy: HTMLElement) {
     clone.removeAttribute("sizes")
     clone.removeAttribute("loading")
     const src = img.currentSrc || img.src
-    // an image that the page hasn't loaded (a lazy one far below) isn't drawn on it either
-    const data =
-      src && img.complete && !img.closest(`[glass-ignore], [${LAYER_ATTRIBUTE}]`) ? await toDataUrl(src) : null
+    // An image that the page hasn't loaded (a lazy one far below) isn't drawn on it either. Nor one in a layer, which
+    // has a picture of its own, unless that layer is what this picture is of.
+    const layer = img.closest(`[${LAYER_ATTRIBUTE}]`)
+    const left = img.closest("[glass-ignore]") || (layer && layer !== page)
+    const data = src && img.complete && !left ? await toDataUrl(src) : null
     if (data) clone.setAttribute("src", await fitImage(img, data))
     else clone.removeAttribute("src")
   })
@@ -564,8 +566,8 @@ export async function snapshot(blur = 0): Promise<Snapshot> {
 
 /**
  * What the ancestors of an element are made of in the picture of the element: their classes and attributes, for the
- * selectors and the inheritance of its style, and nothing of their own (no background, no box, no effect) to be seen
- * around it. Its shadow, which the glass casts below itself, and its canvas, which the renderer draws, are left out.
+ * selectors and the inheritance of its style, and nothing of their own (no background, no box, no effect, no scrollbar:
+ * a page with `overflow-y: scroll` on its body drew one down the side of every picture) to be seen around it. Its shadow, which the glass casts below itself, and its canvas, which the renderer draws, are left out.
  *
  * No backdrop filter either: what is behind the glass inside it (a button on a panel) is the canvas of the panel, left
  * out, so there is nothing to filter, and WebKit doesn't paint an element with one in an SVG image at all, which left
@@ -577,7 +579,7 @@ const ELEMENT_CSS = `
   outline: none !important; transform: none !important; filter: none !important; backdrop-filter: none !important;
   position: static !important;
   perspective: none !important; contain: none !important; clip-path: none !important; mask: none !important;
-  will-change: auto !important;
+  will-change: auto !important; overflow: visible !important; scrollbar-gutter: auto !important;
 }
 [data-glass-shell]::before, [data-glass-shell]::after { display: none !important; }
 ._polinetwork_glass-drop, ._polinetwork_glass-ring, canvas { visibility: hidden !important; }
