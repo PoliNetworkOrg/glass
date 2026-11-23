@@ -19,6 +19,9 @@ const TIGHT_FOR = 300
 const VSYNC_EVERY = 30
 /** A lead that changed by less than this, in ms, isn't sent: the measured frame is a little different on every one */
 const LEAD_STEP = 1
+/** How many times a picture of the page is taken for the worker before it gives up, and how long apart, in ms */
+const PICTURE_TRIES = 3
+const PICTURE_RETRY = 200
 
 const clock = () => performance.timeOrigin + performance.now()
 
@@ -178,22 +181,31 @@ class WorkerRenderer implements Renderer {
     let id = this.pictureIds.get(snapshot)
     if (id !== undefined) return id
     id = ++this.ids
-    const sent = id
     this.pictureIds.set(snapshot, id)
+    this.sendPicture(snapshot, id, 0)
+    return id
+  }
+
+  /** Sends the picture `id` to the worker, as a bitmap made of its canvas, taken again a few times if that fails */
+  private sendPicture(snapshot: Picture, id: number, tries: number) {
     // taken now, before the canvas can be freed; flipped here, as a bitmap isn't by the GPU
     createImageBitmap(snapshot.canvas, { imageOrientation: "flipY", premultiplyAlpha: "none" })
       .then((bitmap) => {
         // released while it was made: the worker, which didn't have it, let the release go, and would keep it forever
-        if (this.pictureIds.get(snapshot) !== sent) {
+        if (this.pictureIds.get(snapshot) !== id) {
           bitmap.close()
           return
         }
-        this.post({ type: "snapshot", id: sent, bitmap, width: snapshot.width, height: snapshot.height }, [bitmap])
+        this.post({ type: "snapshot", id, bitmap, width: snapshot.width, height: snapshot.height }, [bitmap])
       })
       .catch(() => {
-        /* the canvas was freed first: a newer picture takes its place */
+        // the canvas was freed first, and a newer picture takes its place; or it couldn't be taken (out of memory, on
+        // iOS), and the worker, which has the id already, waits for it: taken again, not on every frame
+        if (this.pictureIds.get(snapshot) !== id || tries + 1 >= PICTURE_TRIES) return
+        setTimeout(() => {
+          if (this.pictureIds.get(snapshot) === id) this.sendPicture(snapshot, id, tries + 1)
+        }, PICTURE_RETRY)
       })
-    return id
   }
 
   private tick(time: number) {
@@ -215,6 +227,9 @@ class WorkerRenderer implements Renderer {
       }
       ordered.sort(([, a], [, b]) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
       ordered.forEach(([sent], n) => {
+        // sent again only if it moved in the order: while a glass has no state this runs on every frame, and a state
+        // sent each time would keep the worker drawing
+        if (sent.order === n) return
         sent.order = n
         sent.key = -1
       })
