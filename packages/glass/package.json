@@ -1,12 +1,33 @@
 {
   "name": "@polinetwork/glass",
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "description": "Liquid glass for React: the page behind an element, refracted at its edges in WebGL2, with a CSS fallback.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PoliNetworkOrg/glass.git",
+    "directory": "packages/glass"
+  },
+  "homepage": "https://github.com/PoliNetworkOrg/glass#readme",
+  "bugs": {
+    "url": "https://github.com/PoliNetworkOrg/glass/issues"
+  },
+  "keywords": [
+    "polinetwork",
+    "glass",
+    "liquid glass",
+    "glassmorphism",
+    "react",
+    "webgl"
+  ],
   "type": "module",
   "author": "PoliNetwork APS",
   "license": "MIT",
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "default": "./dist/index.js",

@@ -1,13 +1,13 @@
 {
   "name": "glass",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "author": "PoliNetwork APS",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "pub": "cd packages/glass && pnpm publish --access public",
     "lint": "biome check .",
     "preview": "vite preview"
   },

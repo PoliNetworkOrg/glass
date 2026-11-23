@@ -1,0 +1,22 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm biome ci .
+      - name: Build the package (typecheck included)
+        run: pnpm --filter @polinetwork/glass build
+      - name: Build the demo
+        run: pnpm build
