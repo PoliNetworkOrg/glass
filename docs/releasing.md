@@ -55,7 +55,22 @@ Do these in order: merging into `main` starts a release immediately.
    git push origin v0.1.0
    ```
 
-A failed release does no harm: fix the setup and rerun the job.
+## When a release fails
+
+semantic-release pushes the version tag before it publishes to npm and creates the GitHub release. If the job fails
+before the tag exists, fix the cause and rerun it. If the tag already exists, a rerun skips that version, so first check
+what was published:
+
+```sh
+git ls-remote --tags origin vX.Y.Z         # the tag
+npm view @polinetwork/glass@X.Y.Z version  # the npm version
+gh release view vX.Y.Z                     # the GitHub release
+```
+
+- **Tag pushed, npm version missing:** delete the tag (`git push origin :refs/tags/vX.Y.Z`), fix the cause and rerun
+  the job, which publishes the same version again.
+- **npm version published, GitHub release missing:** keep the tag and don't rerun. Create the release from the tag
+  (`gh release create vX.Y.Z --verify-tag --generate-notes`). npm never accepts the same version twice.
 
 ## Going to 1.0.0
 

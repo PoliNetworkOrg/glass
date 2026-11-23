@@ -27,7 +27,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v6
         with:
-          node-version: "lts/*" # semantic-release 25 and trusted publishing need a recent npm
+          node-version: "24" # the version CI tests on; semantic-release 25 and trusted publishing need its npm 11
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm biome ci .
