@@ -22,7 +22,7 @@ export const GlassContext = createContext<GlassContextType>({
   enabled: true,
   want: () => () => {},
   scrollLead: undefined,
-  worker: false,
+  worker: true,
 })
 
 export function useGlass() {
