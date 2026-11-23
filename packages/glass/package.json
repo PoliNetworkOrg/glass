@@ -1,17 +1,38 @@
 {
   "name": "@polinetwork/glass",
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "description": "Liquid glass for React: the page behind an element, refracted at its edges in WebGL2, with a CSS fallback.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PoliNetworkOrg/glass.git",
+    "directory": "packages/glass"
+  },
+  "homepage": "https://github.com/PoliNetworkOrg/glass#readme",
+  "bugs": {
+    "url": "https://github.com/PoliNetworkOrg/glass/issues"
+  },
+  "keywords": [
+    "polinetwork",
+    "glass",
+    "liquid glass",
+    "glassmorphism",
+    "react",
+    "webgl"
+  ],
   "type": "module",
   "author": "PoliNetwork APS",
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
-      "default": "./dist/index.js",
       "types": "./dist/index.d.ts",
-      "development": "./src/index.ts"
+      "default": "./dist/index.js"
     }
   },
   "module": "./dist/index.js",
@@ -21,10 +42,12 @@
     "build": "tsc -b && vite build",
     "prepublishOnly": "pnpm run build"
   },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
   "dependencies": {
     "motion": "^12.23.24",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -33,9 +56,10 @@
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "globals": "^16.4.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "~5.9.3",
     "vite": "^7.1.7",
     "vite-plugin-dts": "^4.5.4"
-  },
-  "pnpm": {}
+  }
 }

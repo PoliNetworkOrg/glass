@@ -1,0 +1,39 @@
+# Publishes @polinetwork/glass to npm through trusted publishing with OIDC; no npm token is stored.
+# See docs/releasing.md and https://docs.npmjs.com/trusted-publishers#for-github-actions
+
+name: Release npm package
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: npm-release-${{ github.ref }}
+  cancel-in-progress: false # never stop a release halfway through publishing
+
+permissions:
+  contents: write # tags and GitHub releases
+  issues: write
+  pull-requests: write
+  id-token: write # npm trusted publishing
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # semantic-release reads every tag and commit since the last release
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24" # the version CI tests on; semantic-release 25 and trusted publishing need its npm 11
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm biome ci .
+      - run: pnpm --filter @polinetwork/glass build
+      - run: pnpm build
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --yes -p semantic-release@25 -p conventional-changelog-conventionalcommits@9 semantic-release
