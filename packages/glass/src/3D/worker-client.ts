@@ -42,8 +42,14 @@ type Sent = {
   /** Where its center and the scroll were in the state last sent: NaN for none */
   center: [number, number]
   scroll: [number, number]
-  /** Its center moved between the last two states sent: the worker may draw it where the scroll goes */
+  /**
+   * The worker draws it where the scroll or its own path goes, not in place on the page: what the worker made of the
+   * states sent (see `receive` in worker.ts), followed here as it does, so that one state with the page scrolled and the
+   * center still tells it the glass stopped
+   */
   moving: boolean
+  /** A state was sent: the first one says, from `fixed`, how the worker draws it until it moves */
+  known: boolean
   nulled: boolean
   order: number
   /** The worker asked for the picture of what it has over its glass */
@@ -121,6 +127,7 @@ class WorkerRenderer implements Renderer {
       center: [Number.NaN, Number.NaN],
       scroll: [0, 0],
       moving: false,
+      known: false,
       nulled: false,
       order: 0,
       overlay: false,
@@ -221,7 +228,7 @@ class WorkerRenderer implements Renderer {
         if (!sent.nulled) this.post({ type: "state", id: sent.id, state: null })
         sent.nulled = true
         sent.key = -1
-        // the worker compares the next state with none: nothing moved before it
+        // the worker compares the next state with none, and learns nothing from it: it keeps drawing it as it did
         sent.center[0] = sent.center[1] = Number.NaN
         continue
       }
@@ -248,7 +255,17 @@ class WorkerRenderer implements Renderer {
       }
       sent.key = state.key
       sent.lead = state.lead
-      sent.moving = Math.hypot(state.center[0] - sent.center[0], state.center[1] - sent.center[1]) >= STILL_PX
+      if (!sent.known) {
+        sent.known = true
+        sent.moving = sent.fixed ?? false
+      } else if (!Number.isNaN(sent.center[0])) {
+        // only what changes what the worker does changes this: a state with nothing moved (a new picture, a new tint
+        // with the page still) leaves it drawing the glass as it did, and this saying so
+        const centerMoved = Math.hypot(state.center[0] - sent.center[0], state.center[1] - sent.center[1]) >= STILL_PX
+        const scrolled = Math.hypot(sx - sent.scroll[0], sy - sent.scroll[1]) >= STILL_PX
+        if (scrolled && !centerMoved) sent.moving = false
+        else if (centerMoved) sent.moving = true
+      }
       sent.center[0] = state.center[0]
       sent.center[1] = state.center[1]
       sent.scroll[0] = sx
