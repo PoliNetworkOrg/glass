@@ -1,6 +1,6 @@
 import { useMotionValue } from "motion/react"
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { releaseSnapshot } from "../3D/renderer"
+import { releaseSnapshot } from "../3D/main"
 import { watchFrames } from "./frames"
 import { onMediaChange, type Snapshot, snapshot } from "./snapshot"
 
