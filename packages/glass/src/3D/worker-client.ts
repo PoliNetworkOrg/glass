@@ -1,7 +1,7 @@
 import { drawFrames, frameScroll } from "../utils/frames"
 import type { Renderer } from "./main"
 import { forgetPicture, takePicture, tickPictures } from "./pictures"
-import type { FromWorker, ToWorker } from "./protocol"
+import { type FromWorker, STILL_PX, type ToWorker } from "./protocol"
 import type { GlassState, GlassTarget, Picture } from "./renderer"
 import GlassWorker from "./worker?worker&inline"
 
@@ -17,6 +17,8 @@ const TIGHT = 4
 const TIGHT_FOR = 300
 /** Every how many frames of the page the worker is told when one started, to keep its own in step */
 const VSYNC_EVERY = 30
+/** A lead that changed by less than this, in ms, isn't sent: the measured frame is a little different on every one */
+const LEAD_STEP = 1
 
 const clock = () => performance.timeOrigin + performance.now()
 
@@ -35,6 +37,13 @@ type Sent = {
   id: number
   /** The key of the state last sent, -1 for none */
   key: number
+  /** The lead of the state last sent */
+  lead: number
+  /** Where its center and the scroll were in the state last sent: NaN for none */
+  center: [number, number]
+  scroll: [number, number]
+  /** Its center moved between the last two states sent: the worker may draw it where the scroll goes */
+  moving: boolean
   nulled: boolean
   order: number
   /** The worker asked for the picture of what it has over its glass */
@@ -80,6 +89,12 @@ class WorkerRenderer implements Renderer {
         this.fail()
       }
     }
+    // what it can't say itself: its script didn't load (blocked by the page's CSP), or threw outside what it catches
+    this.worker.onerror = (e) => {
+      e.preventDefault()
+      console.warn(`glass: the worker stopped, the glass is drawn on the page: ${e.message}`)
+      this.fail()
+    }
   }
 
   /** Gives up on the worker: the glass is drawn on the page's thread from the next render (see `useRenderer`) */
@@ -99,7 +114,18 @@ class WorkerRenderer implements Renderer {
     const canvas = target.canvas as HTMLCanvasElement
     const offscreen = canvas.transferControlToOffscreen()
     const id = ++this.ids
-    this.glasses.set(target, { id, key: -1, nulled: false, order: 0, overlay: false, fixed: null })
+    this.glasses.set(target, {
+      id,
+      key: -1,
+      lead: 0,
+      center: [Number.NaN, Number.NaN],
+      scroll: [0, 0],
+      moving: false,
+      nulled: false,
+      order: 0,
+      overlay: false,
+      fixed: null,
+    })
     this.byId.set(id, target)
     this.reorder = true
     this.post({ type: "add", id, canvas: offscreen }, [offscreen])
@@ -149,9 +175,14 @@ class WorkerRenderer implements Renderer {
     this.pictureIds.set(snapshot, id)
     // taken now, before the canvas can be freed; flipped here, as a bitmap isn't by the GPU
     createImageBitmap(snapshot.canvas, { imageOrientation: "flipY", premultiplyAlpha: "none" })
-      .then((bitmap) =>
+      .then((bitmap) => {
+        // released while it was made: the worker, which didn't have it, let the release go, and would keep it forever
+        if (this.pictureIds.get(snapshot) !== sent) {
+          bitmap.close()
+          return
+        }
         this.post({ type: "snapshot", id: sent, bitmap, width: snapshot.width, height: snapshot.height }, [bitmap])
-      )
+      })
       .catch(() => {
         /* the canvas was freed first: a newer picture takes its place */
       })
@@ -190,6 +221,8 @@ class WorkerRenderer implements Renderer {
         if (!sent.nulled) this.post({ type: "state", id: sent.id, state: null })
         sent.nulled = true
         sent.key = -1
+        // the worker compares the next state with none: nothing moved before it
+        sent.center[0] = sent.center[1] = Number.NaN
         continue
       }
       sent.nulled = false
@@ -202,8 +235,24 @@ class WorkerRenderer implements Renderer {
             .catch(() => {})
         })
       }
-      if (state.key === sent.key) continue
+      const sx = frameScroll.x
+      const sy = frameScroll.y
+      if (state.key === sent.key) {
+        // The same state, but still sent when the worker draws it from the old one wrong: the lead it is drawn ahead
+        // with changed (from touch to a mouse, a new `scrollLead`); or it followed the screen and stopped (a sticky
+        // glass at the end of its box) while the page goes on scrolling, which only a state with the page scrolled
+        // and the center still tells the worker. Not on every scroll: most glasses scroll with the page, center still.
+        const leadChanged = Math.abs(state.lead - sent.lead) >= LEAD_STEP
+        const stopped = sent.moving && Math.hypot(sx - sent.scroll[0], sy - sent.scroll[1]) >= STILL_PX
+        if (!leadChanged && !stopped) continue
+      }
       sent.key = state.key
+      sent.lead = state.lead
+      sent.moving = Math.hypot(state.center[0] - sent.center[0], state.center[1] - sent.center[1]) >= STILL_PX
+      sent.center[0] = state.center[0]
+      sent.center[1] = state.center[1]
+      sent.scroll[0] = sx
+      sent.scroll[1] = sy
       this.post({
         type: "state",
         id: sent.id,
@@ -215,7 +264,7 @@ class WorkerRenderer implements Renderer {
           height: state.height,
           drawn: state.drawn,
           center: state.center,
-          scroll: [frameScroll.x, frameScroll.y],
+          scroll: [sx, sy],
           t,
           fixed: sent.fixed ?? false,
           lead: state.lead,

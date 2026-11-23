@@ -1,5 +1,5 @@
 import { createStreamPredictor } from "../utils/predict"
-import type { FromWorker, SentState, ToWorker } from "./protocol"
+import { type FromWorker, type SentState, STILL_PX, type ToWorker } from "./protocol"
 import { GlassRenderer, type GlassState, type GlassTarget, nextKey, type Overlay, type Picture } from "./renderer"
 
 // The renderer in a worker. Safari on iOS draws the page's animation frames 60 times a second by default, on a display
@@ -18,8 +18,6 @@ const PERIOD = 1000 / 120
 const AWAKE = 400
 /** Every how many ms it tells the page how many frames it drew, while it draws */
 const REPORT_EVERY = 250
-/** Under this, in px, a center or a scroll didn't move */
-const STILL_PX = 0.5
 
 const scope = self as unknown as {
   onmessage: ((e: MessageEvent<ToWorker>) => void) | null

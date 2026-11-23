@@ -60,6 +60,9 @@ class Changes {
 
   reset() {
     this.count = this.time = this.gap = this.stops = 0
+    // the next change only sets where the page is from: its wait began before the reset
+    this.last = 0
+    this.x = this.y = Number.NaN
   }
 }
 
@@ -83,6 +86,8 @@ class Events {
 
   reset() {
     this.count = this.time = 0
+    // the next event only starts a run: its wait began before the reset
+    this.last = Number.NEGATIVE_INFINITY
   }
 }
 

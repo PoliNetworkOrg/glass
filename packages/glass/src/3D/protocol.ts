@@ -3,6 +3,9 @@ import type { GlassUniforms } from "./displacement"
 // What the page and the worker that draws the glass tell each other. Times are on the clock both share,
 // `performance.timeOrigin + performance.now()`, in ms.
 
+/** Under this, in px, a center or a scroll didn't move */
+export const STILL_PX = 0.5
+
 /** The state of a glass as the page reads it on one of its frames: where it is, not ahead */
 export type SentState = {
   /** The id of the picture of the page it bends */
