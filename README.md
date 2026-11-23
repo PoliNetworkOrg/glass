@@ -118,6 +118,11 @@ behind the glass it is under. That covers what an animation the compositor runs 
   followed where they move it, not where they turn or scale it. What is painted before a layer and isn't an ancestor of
   it (a sibling with a background, below it in `z-index`) is drawn in front of it. A layer is blended normally
   (`mix-blend-mode` is left out). The CSS glass needs none of this: it blurs the live page.
+- **A canvas is a live layer.** What a page draws on a `<canvas>` is in no capture, and nothing tells the glass when it
+  changes. A `<canvas glass-layer="">` is its own picture: the glass takes it as it is on every frame it is drawn
+  under a glass, wherever the canvas is on that frame. Draw what moves on it (lines that turn, particles) and move the
+  canvas itself with a transform, on the same frame. In the worker the picture is sent at 1x, one at a time, only while
+  the canvas is near a glass, with where the canvas was when it was taken.
 
 ## Presets
 

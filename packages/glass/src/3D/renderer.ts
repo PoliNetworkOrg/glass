@@ -59,6 +59,11 @@ export type LiveLayer = {
   margin: number
   /** One more each time a new picture is put in */
   pictureVersion: number
+  /**
+   * The layer is a `<canvas>` the page draws on, and its picture is the canvas itself, taken again on every frame
+   * (see 3D/layers.ts). Its pixels and its place change together, so in a worker its place comes with its picture.
+   */
+  live: boolean
   /** The size of its box, in CSS px */
   width: number
   height: number
@@ -262,7 +267,7 @@ type Backdrop = Target & { version: number; region: [number, number, number, num
 const NO_LAYERS: LiveLayer[] = []
 
 /** Half the size of what a layer draws on the screen, its picture through its transform, in px */
-const layerHalf = (l: LiveLayer, axis: 0 | 1) => {
+export const layerHalf = (l: LiveLayer, axis: 0 | 1) => {
   const hw = l.width / 2 + l.margin
   const hh = l.height / 2 + l.margin
   const [a, b, c, d] = l.matrix
@@ -300,7 +305,10 @@ export class GlassRenderer {
   /** What the pictures have in front of their layers, see `over` of `Picture` */
   private readonly overTextures = new Map<Picture, WebGLTexture>()
   /** The pictures of the animated layers on the GPU, and which of each it is */
-  private readonly layerTextures = new Map<LiveLayer, { texture: WebGLTexture; version: number }>()
+  private readonly layerTextures = new Map<
+    LiveLayer,
+    { texture: WebGLTexture; version: number; width: number; height: number }
+  >()
   /** Which layers were last seen, see `set` of `LiveLayers` */
   private layerSet = -1
   /** The pictures blurred by a frost, by its sigma */
@@ -797,18 +805,27 @@ export class GlassRenderer {
     const texture = gpu?.texture ?? gl.createTexture()
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, texture)
-    if (layer.picture) {
+    const picture = layer.picture
+    const width = picture?.width ?? 0
+    const height = picture?.height ?? 0
+    if (picture) {
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, layer.picture)
+      // a live layer (a canvas) is uploaded on every frame: into the texture it has, while it is the same size
+      if (gpu && gpu.width === width && gpu.height === height) {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, picture)
+      } else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture)
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
     }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    if (gpu) gpu.version = layer.pictureVersion
-    else this.layerTextures.set(layer, { texture, version: layer.pictureVersion })
+    if (gpu) {
+      gpu.version = layer.pictureVersion
+      gpu.width = width
+      gpu.height = height
+    } else this.layerTextures.set(layer, { texture, version: layer.pictureVersion, width, height })
     return texture
   }
 

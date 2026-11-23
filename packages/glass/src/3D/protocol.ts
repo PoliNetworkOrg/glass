@@ -37,7 +37,11 @@ export type SentLayer = {
   matrix: [number, number, number, number]
   opacity: number
   visible: boolean
+  live: boolean
 }
+
+/** Where a live layer (a canvas) was when its picture was taken, sent with it: see `live` of `LiveLayer` */
+export type LayerPlace = Pick<SentLayer, "width" | "height" | "center" | "fixed" | "matrix">
 
 export type ToWorker =
   /** A glass, and the canvas it is shown on, handed over */
@@ -60,7 +64,7 @@ export type ToWorker =
   /** The animated layers of the page, all of them, in the order of the document: when which they are or one changed */
   | { type: "layers"; layers: SentLayer[] }
   /** The picture of layer `id`, flipped and premultiplied, `margin` px bigger than its box on each side */
-  | { type: "layer-picture"; id: number; bitmap: ImageBitmap; margin: number }
+  | { type: "layer-picture"; id: number; bitmap: ImageBitmap; margin: number; place?: LayerPlace }
 
 export type FromWorker =
   /** Glass `id` is under a higher layer: send the picture of what it has over its glass, and again when it changes */

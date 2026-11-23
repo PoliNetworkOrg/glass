@@ -8,6 +8,7 @@ import type { LiveLayer, LiveLayers } from "./renderer"
 // (and again when it changes, as the picture of what a glass has over it is), and on every frame where it is drawn is
 // read here, in the read phase of the frame loop: its box, its transform and its opacity, which is what a CSS
 // animation that the compositor can run moves. The renderer then draws it there, behind the glass it is under.
+// A `<canvas>` layer is different: what the page draws on it is its picture, taken again on every frame.
 
 /** The layers, as the renderer reads them: one list kept from frame to frame, changed in place */
 export const liveLayers: LiveLayers = { list: [], set: 0 }
@@ -62,6 +63,7 @@ function refresh() {
         picture: null,
         margin: 0,
         pictureVersion: 0,
+        live: element instanceof HTMLCanvasElement,
         width: 0,
         height: 0,
         center: [0, 0],
@@ -191,6 +193,15 @@ function read(w: Watched) {
       layer.opacity = next
       changed = true
     }
+  }
+  if (element instanceof HTMLCanvasElement) {
+    // A canvas is its own picture: the page draws on it whenever it wants, which nothing on the page says, and a
+    // capture of the page can't see into one anyway. It is taken as it is on every frame it is drawn under a glass.
+    layer.picture = element
+    layer.margin = 0
+    layer.pictureVersion++
+    layer.version++
+    return
   }
   if (changed) layer.version++
 
